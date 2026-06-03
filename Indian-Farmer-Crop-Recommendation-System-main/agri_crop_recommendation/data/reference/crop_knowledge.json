@@ -1,0 +1,961 @@
+{
+  "_comment": "Central crop knowledge database — single source of truth for growth phases, pest/disease data, and planting windows. Used by planting_calendar.py and pest_warnings.py.",
+  "_version": "1.0",
+  "season_planting_windows": {
+    "Kharif": {
+      "start_month": 6,
+      "start_day": 15,
+      "end_month": 7,
+      "end_day": 31,
+      "label": "Kharif (June–July)"
+    },
+    "Rabi": {
+      "start_month": 10,
+      "start_day": 15,
+      "end_month": 11,
+      "end_day": 30,
+      "label": "Rabi (October–November)"
+    },
+    "Zaid": {
+      "start_month": 3,
+      "start_day": 1,
+      "end_month": 4,
+      "end_day": 15,
+      "label": "Zaid (March–April)"
+    }
+  },
+  "season_water_adjustments": {
+    "_comment": "Multipliers applied to crop base water requirement per season. <1 = surplus from rainfall/residual moisture. >1 = extra irrigation needed.",
+    "Kharif": 0.85,
+    "Rabi": 0.95,
+    "Zaid": 1.10
+  },
+  "season_info": {
+    "Kharif": {
+      "name": "Kharif",
+      "description": "Monsoon season crops (June–October)",
+      "typical_crops": [
+        "Bajra",
+        "Jowar",
+        "Rice",
+        "Maize",
+        "Cotton",
+        "Soybean"
+      ],
+      "water_source": "Primarily monsoon rainfall",
+      "characteristics": "High rainfall, warm temperatures, humid conditions"
+    },
+    "Rabi": {
+      "name": "Rabi",
+      "description": "Winter season crops (November–March)",
+      "typical_crops": [
+        "Wheat",
+        "Chickpea",
+        "Mustard",
+        "Barley",
+        "Peas"
+      ],
+      "water_source": "Irrigation and residual soil moisture",
+      "characteristics": "Cool temperatures, low rainfall, requires irrigation"
+    },
+    "Zaid": {
+      "name": "Zaid",
+      "description": "Summer season crops (March–June)",
+      "typical_crops": [
+        "Watermelon",
+        "Cucumber",
+        "Muskmelon",
+        "Vegetables"
+      ],
+      "water_source": "Primarily irrigation",
+      "characteristics": "Hot temperatures, dry conditions, high water requirement"
+    }
+  },
+  "growth_phases": {
+    "_comment": "All fractions sum to 1.0. germination+vegetative+flowering+maturity = 1.0. For very short crops (≤30 days), maturity is merged into flowering.",
+    "BAJRA_01": {
+      "germination": 0.10,
+      "vegetative": 0.35,
+      "flowering": 0.25,
+      "maturity": 0.30
+    },
+    "JOWAR_01": {
+      "germination": 0.08,
+      "vegetative": 0.38,
+      "flowering": 0.24,
+      "maturity": 0.30
+    },
+    "RAGI_01": {
+      "germination": 0.10,
+      "vegetative": 0.35,
+      "flowering": 0.25,
+      "maturity": 0.30
+    },
+    "FOXTAIL_01": {
+      "germination": 0.10,
+      "vegetative": 0.35,
+      "flowering": 0.25,
+      "maturity": 0.30
+    },
+    "MOONG_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "URAD_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "COWPEA_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "GUAR_01": {
+      "germination": 0.08,
+      "vegetative": 0.32,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "MOONG_DAL_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "URAD_DAL_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "COWPEA_VEG_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.30,
+      "maturity": 0.30
+    },
+    "MASOOR_01": {
+      "germination": 0.08,
+      "vegetative": 0.35,
+      "flowering": 0.27,
+      "maturity": 0.30
+    },
+    "SESAME_01": {
+      "germination": 0.08,
+      "vegetative": 0.35,
+      "flowering": 0.27,
+      "maturity": 0.30
+    },
+    "SUNFLOWER_01": {
+      "germination": 0.08,
+      "vegetative": 0.30,
+      "flowering": 0.32,
+      "maturity": 0.30
+    },
+    "SOYBEAN_01": {
+      "germination": 0.08,
+      "vegetative": 0.35,
+      "flowering": 0.27,
+      "maturity": 0.30
+    },
+    "TOMATO_01": {
+      "germination": 0.10,
+      "vegetative": 0.25,
+      "flowering": 0.35,
+      "maturity": 0.30
+    },
+    "BRINJAL_01": {
+      "germination": 0.10,
+      "vegetative": 0.25,
+      "flowering": 0.35,
+      "maturity": 0.30
+    },
+    "OKRA_01": {
+      "germination": 0.08,
+      "vegetative": 0.30,
+      "flowering": 0.32,
+      "maturity": 0.30
+    },
+    "BOTTLEGOURD_01": {
+      "germination": 0.08,
+      "vegetative": 0.30,
+      "flowering": 0.32,
+      "maturity": 0.30
+    },
+    "CUCUMBER_01": {
+      "germination": 0.10,
+      "vegetative": 0.28,
+      "flowering": 0.34,
+      "maturity": 0.28
+    },
+    "RIDGE_GOURD_01": {
+      "germination": 0.09,
+      "vegetative": 0.30,
+      "flowering": 0.33,
+      "maturity": 0.28
+    },
+    "BITTER_GOURD_01": {
+      "germination": 0.10,
+      "vegetative": 0.28,
+      "flowering": 0.33,
+      "maturity": 0.29
+    },
+    "SPONGE_GOURD_01": {
+      "germination": 0.10,
+      "vegetative": 0.28,
+      "flowering": 0.33,
+      "maturity": 0.29
+    },
+    "PUMPKIN_01": {
+      "germination": 0.07,
+      "vegetative": 0.30,
+      "flowering": 0.33,
+      "maturity": 0.30
+    },
+    "CAPSICUM_01": {
+      "germination": 0.10,
+      "vegetative": 0.28,
+      "flowering": 0.32,
+      "maturity": 0.30
+    },
+    "GREEN_CHILLI_01": {
+      "germination": 0.10,
+      "vegetative": 0.28,
+      "flowering": 0.32,
+      "maturity": 0.30
+    },
+    "FRENCH_BEANS_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.32,
+      "maturity": 0.28
+    },
+    "CLUSTER_BEANS_01": {
+      "germination": 0.10,
+      "vegetative": 0.30,
+      "flowering": 0.32,
+      "maturity": 0.28
+    },
+    "BABY_CORN_01": {
+      "germination": 0.09,
+      "vegetative": 0.36,
+      "flowering": 0.30,
+      "maturity": 0.25
+    },
+    "CARROT_01": {
+      "germination": 0.08,
+      "vegetative": 0.40,
+      "flowering": 0.20,
+      "maturity": 0.32
+    },
+    "RADISH_01": {
+      "germination": 0.09,
+      "vegetative": 0.50,
+      "flowering": 0.20,
+      "maturity": 0.21
+    },
+    "TURNIP_01": {
+      "germination": 0.08,
+      "vegetative": 0.45,
+      "flowering": 0.22,
+      "maturity": 0.25
+    },
+    "BEETROOT_01": {
+      "germination": 0.08,
+      "vegetative": 0.45,
+      "flowering": 0.20,
+      "maturity": 0.27
+    },
+    "BABY_POTATO_01": {
+      "germination": 0.08,
+      "vegetative": 0.38,
+      "flowering": 0.22,
+      "maturity": 0.32
+    },
+    "SPINACH_01": {
+      "germination": 0.17,
+      "vegetative": 0.50,
+      "flowering": 0.20,
+      "maturity": 0.13
+    },
+    "FENUGREEK_01": {
+      "germination": 0.18,
+      "vegetative": 0.50,
+      "flowering": 0.18,
+      "maturity": 0.14
+    },
+    "CORIANDER_01": {
+      "germination": 0.17,
+      "vegetative": 0.46,
+      "flowering": 0.20,
+      "maturity": 0.17
+    },
+    "AMARANTH_01": {
+      "germination": 0.16,
+      "vegetative": 0.50,
+      "flowering": 0.19,
+      "maturity": 0.15
+    },
+    "MUSTARD_GREENS_01": {
+      "germination": 0.16,
+      "vegetative": 0.50,
+      "flowering": 0.19,
+      "maturity": 0.15
+    },
+    "LETTUCE_01": {
+      "germination": 0.13,
+      "vegetative": 0.55,
+      "flowering": 0.18,
+      "maturity": 0.14
+    },
+    "SPRING_ONION_01": {
+      "germination": 0.15,
+      "vegetative": 0.52,
+      "flowering": 0.18,
+      "maturity": 0.15
+    },
+    "MINT_01": {
+      "germination": 0.14,
+      "vegetative": 0.55,
+      "flowering": 0.18,
+      "maturity": 0.13
+    },
+    "DILL_01": {
+      "germination": 0.16,
+      "vegetative": 0.47,
+      "flowering": 0.22,
+      "maturity": 0.15
+    },
+    "CURRY_LEAVES_01": {
+      "germination": 0.15,
+      "vegetative": 0.52,
+      "flowering": 0.18,
+      "maturity": 0.15
+    },
+    "DRUMSTICK_LEAVES_01": {
+      "germination": 0.13,
+      "vegetative": 0.52,
+      "flowering": 0.20,
+      "maturity": 0.15
+    },
+    "MICROGREENS_01": {
+      "germination": 0.40,
+      "vegetative": 0.60,
+      "flowering": 0.00,
+      "maturity": 0.00
+    }
+  },
+  "care_tips": {
+    "_comment": "Phase-specific care tips. Defaults apply if crop_id not found.",
+    "_default": {
+      "germination": [
+        "Ensure adequate soil moisture for seed germination",
+        "Protect seeds from birds and rodents",
+        "Maintain soil temperature above 20°C for optimal germination"
+      ],
+      "vegetative": [
+        "Apply first dose of fertilizer (NPK) after 2 weeks",
+        "Regular weeding to reduce competition",
+        "Monitor for early pest attacks",
+        "Ensure consistent irrigation if rainfall is insufficient"
+      ],
+      "flowering": [
+        "Avoid water stress during this critical phase",
+        "Apply second dose of fertilizer",
+        "Monitor closely for pest and disease outbreaks",
+        "Avoid pesticide spraying during peak flowering (protect pollinators)"
+      ],
+      "maturity": [
+        "Reduce irrigation gradually as crop approaches maturity",
+        "Watch for signs of harvest readiness",
+        "Prepare storage and drying facilities",
+        "Plan harvest timing to avoid rain damage to mature crop"
+      ]
+    },
+    "MICROGREENS_01": {
+      "germination": [
+        "Mist with water twice daily",
+        "Keep in bright indirect light",
+        "Use clean trays with drainage holes"
+      ],
+      "vegetative": [
+        "Harvest with scissors when cotyledons are fully open",
+        "Rinse before consumption",
+        "Store in refrigerator for up to 5 days"
+      ],
+      "flowering": [],
+      "maturity": []
+    },
+    "MINT_01": {
+      "germination": [
+        "Plant cuttings or runners instead of seeds for faster establishment",
+        "Keep soil moist but not waterlogged"
+      ],
+      "vegetative": [
+        "Harvest leaves regularly to encourage bushy growth",
+        "Remove flower buds to maintain leaf quality"
+      ],
+      "flowering": [
+        "Pinch flower heads to redirect energy to leaves",
+        "Apply light NPK feed"
+      ],
+      "maturity": [
+        "Harvest entire stems 5 cm above ground",
+        "Allow regrowth for next cutting"
+      ]
+    },
+    "CURRY_LEAVES_01": {
+      "germination": [
+        "Plant stem cuttings 10 cm deep",
+        "Water lightly every 2 days"
+      ],
+      "vegetative": [
+        "Prune young shoots to encourage branching",
+        "Apply compost monthly"
+      ],
+      "flowering": [
+        "Remove flowers to encourage leaf production",
+        "Harvest outer leaves only"
+      ],
+      "maturity": [
+        "Allow plant to establish for 2 seasons before heavy harvesting"
+      ]
+    }
+  },
+  "pest_diseases": [
+    {
+      "id": "aphids",
+      "name": "Aphids",
+      "type": "pest",
+      "affected_crops": [
+        "MOONG_01",
+        "URAD_01",
+        "COWPEA_01",
+        "SESAME_01",
+        "SUNFLOWER_01",
+        "SOYBEAN_01",
+        "TOMATO_01",
+        "BRINJAL_01",
+        "OKRA_01",
+        "MOONG_DAL_01",
+        "URAD_DAL_01",
+        "COWPEA_VEG_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01",
+        "FRENCH_BEANS_01",
+        "CLUSTER_BEANS_01",
+        "MASOOR_01",
+        "SPINACH_01",
+        "FENUGREEK_01",
+        "CORIANDER_01",
+        "LETTUCE_01",
+        "MUSTARD_GREENS_01",
+        "DILL_01",
+        "MINT_01",
+        "DRUMSTICK_LEAVES_01"
+      ],
+      "conditions": {
+        "temp_min": 15,
+        "temp_max": 30,
+        "humidity_min": 60,
+        "rainfall_max": 10
+      },
+      "severity_base": "Moderate",
+      "description": "Sap-sucking insects that weaken plants and transmit viruses.",
+      "prevention": "Use neem oil spray. Introduce ladybugs. Remove affected plant parts."
+    },
+    {
+      "id": "whitefly",
+      "name": "Whitefly",
+      "type": "pest",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "OKRA_01",
+        "SOYBEAN_01",
+        "COWPEA_01",
+        "BOTTLEGOURD_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01",
+        "CUCUMBER_01",
+        "RIDGE_GOURD_01",
+        "BITTER_GOURD_01",
+        "SPONGE_GOURD_01",
+        "FRENCH_BEANS_01",
+        "MOONG_DAL_01",
+        "DRUMSTICK_LEAVES_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 35,
+        "humidity_min": 50,
+        "rainfall_max": 15
+      },
+      "severity_base": "Moderate",
+      "description": "Tiny white flying insects that suck plant sap and spread viral diseases.",
+      "prevention": "Use yellow sticky traps. Apply neem-based insecticides. Practice crop rotation."
+    },
+    {
+      "id": "armyworm",
+      "name": "Fall Armyworm",
+      "type": "pest",
+      "affected_crops": [
+        "BAJRA_01",
+        "JOWAR_01",
+        "RAGI_01",
+        "FOXTAIL_01",
+        "BABY_CORN_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 35,
+        "humidity_min": 50
+      },
+      "severity_base": "High",
+      "description": "Destructive caterpillar that feeds on leaves and stems of millets and cereals.",
+      "prevention": "Early detection and hand-picking. Use pheromone traps. Apply Bt-based bio-pesticides."
+    },
+    {
+      "id": "stemBorer",
+      "name": "Stem Borer",
+      "type": "pest",
+      "affected_crops": [
+        "BAJRA_01",
+        "JOWAR_01",
+        "RAGI_01",
+        "BABY_CORN_01"
+      ],
+      "conditions": {
+        "temp_min": 25,
+        "temp_max": 38,
+        "humidity_min": 60
+      },
+      "severity_base": "High",
+      "description": "Larvae bore into stems causing dead hearts in early stage and white ears at later stage.",
+      "prevention": "Remove and destroy affected plants. Use resistant varieties. Apply carbofuran granules."
+    },
+    {
+      "id": "powdery_mildew",
+      "name": "Powdery Mildew",
+      "type": "disease",
+      "affected_crops": [
+        "MOONG_01",
+        "URAD_01",
+        "COWPEA_01",
+        "GUAR_01",
+        "OKRA_01",
+        "BOTTLEGOURD_01",
+        "CUCUMBER_01",
+        "RIDGE_GOURD_01",
+        "BITTER_GOURD_01",
+        "SPONGE_GOURD_01",
+        "PUMPKIN_01",
+        "CLUSTER_BEANS_01",
+        "COWPEA_VEG_01",
+        "FRENCH_BEANS_01",
+        "MASOOR_01",
+        "CAPSICUM_01"
+      ],
+      "conditions": {
+        "temp_min": 18,
+        "temp_max": 28,
+        "humidity_min": 70,
+        "rainfall_min": 5
+      },
+      "severity_base": "Moderate",
+      "description": "White powdery fungal growth on leaves and stems, reducing photosynthesis.",
+      "prevention": "Apply sulfur-based fungicides. Ensure proper spacing for air circulation. Remove infected leaves."
+    },
+    {
+      "id": "downy_mildew",
+      "name": "Downy Mildew",
+      "type": "disease",
+      "affected_crops": [
+        "BAJRA_01",
+        "JOWAR_01",
+        "SUNFLOWER_01",
+        "SPINACH_01",
+        "LETTUCE_01",
+        "CORIANDER_01",
+        "FENUGREEK_01",
+        "MUSTARD_GREENS_01"
+      ],
+      "conditions": {
+        "temp_min": 15,
+        "temp_max": 25,
+        "humidity_min": 80,
+        "rainfall_min": 10
+      },
+      "severity_base": "High",
+      "description": "Fungal disease causing yellowing and downy growth on leaf undersides.",
+      "prevention": "Use resistant varieties. Treat seeds with metalaxyl. Avoid overhead irrigation."
+    },
+    {
+      "id": "fusarium_wilt",
+      "name": "Fusarium Wilt",
+      "type": "disease",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "MOONG_01",
+        "URAD_01",
+        "SESAME_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01",
+        "MOONG_DAL_01",
+        "BABY_POTATO_01"
+      ],
+      "conditions": {
+        "temp_min": 25,
+        "temp_max": 35,
+        "humidity_min": 60
+      },
+      "severity_base": "High",
+      "description": "Soil-borne fungal disease causing wilting and browning of vascular tissue.",
+      "prevention": "Use resistant varieties. Practice crop rotation (3-year cycle). Solarize soil before planting."
+    },
+    {
+      "id": "anthracnose",
+      "name": "Anthracnose",
+      "type": "disease",
+      "affected_crops": [
+        "MOONG_01",
+        "URAD_01",
+        "SOYBEAN_01",
+        "TOMATO_01",
+        "FRENCH_BEANS_01",
+        "CLUSTER_BEANS_01",
+        "COWPEA_VEG_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 30,
+        "humidity_min": 80,
+        "rainfall_min": 20
+      },
+      "severity_base": "Moderate",
+      "description": "Fungal disease causing dark sunken lesions on leaves, stems, and pods.",
+      "prevention": "Use disease-free seeds. Apply mancozeb fungicide. Avoid working in wet fields."
+    },
+    {
+      "id": "leaf_blight",
+      "name": "Leaf Blight",
+      "type": "disease",
+      "affected_crops": [
+        "BAJRA_01",
+        "JOWAR_01",
+        "RAGI_01",
+        "FOXTAIL_01",
+        "BABY_CORN_01"
+      ],
+      "conditions": {
+        "temp_min": 22,
+        "temp_max": 32,
+        "humidity_min": 75,
+        "rainfall_min": 10
+      },
+      "severity_base": "Moderate",
+      "description": "Fungal disease causing elongated brown lesions on leaves.",
+      "prevention": "Remove crop residues. Use resistant varieties. Apply propiconazole fungicide."
+    },
+    {
+      "id": "early_blight",
+      "name": "Early Blight",
+      "type": "disease",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "BABY_POTATO_01",
+        "CAPSICUM_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 30,
+        "humidity_min": 70,
+        "rainfall_min": 5
+      },
+      "severity_base": "Moderate",
+      "description": "Causes concentric ring-shaped lesions on lower leaves, spreading upward.",
+      "prevention": "Remove infected lower leaves. Apply chlorothalonil fungicide. Maintain proper plant spacing."
+    },
+    {
+      "id": "late_blight",
+      "name": "Late Blight",
+      "type": "disease",
+      "affected_crops": [
+        "TOMATO_01",
+        "BABY_POTATO_01"
+      ],
+      "conditions": {
+        "temp_min": 10,
+        "temp_max": 20,
+        "humidity_min": 85,
+        "rainfall_min": 15
+      },
+      "severity_base": "High",
+      "description": "Rapidly spreading fungal-like disease causing dark lesions and crop collapse.",
+      "prevention": "Apply mancozeb or metalaxyl. Remove infected debris. Avoid overhead irrigation."
+    },
+    {
+      "id": "rust",
+      "name": "Rust Disease",
+      "type": "disease",
+      "affected_crops": [
+        "SOYBEAN_01",
+        "SUNFLOWER_01",
+        "MOONG_01",
+        "FRENCH_BEANS_01",
+        "CLUSTER_BEANS_01"
+      ],
+      "conditions": {
+        "temp_min": 15,
+        "temp_max": 28,
+        "humidity_min": 80,
+        "rainfall_min": 10
+      },
+      "severity_base": "High",
+      "description": "Fungal disease producing orange-brown pustules on leaves, reducing yield.",
+      "prevention": "Use resistant varieties. Apply triazole fungicides. Remove volunteer plants."
+    },
+    {
+      "id": "yellow_mosaic",
+      "name": "Yellow Mosaic Virus",
+      "type": "disease",
+      "affected_crops": [
+        "MOONG_01",
+        "URAD_01",
+        "SOYBEAN_01",
+        "MOONG_DAL_01",
+        "URAD_DAL_01",
+        "COWPEA_VEG_01",
+        "OKRA_01",
+        "FRENCH_BEANS_01"
+      ],
+      "conditions": {
+        "temp_min": 25,
+        "temp_max": 35,
+        "humidity_min": 50
+      },
+      "severity_base": "High",
+      "description": "Viral disease causing yellow mottling on leaves, spread by whiteflies.",
+      "prevention": "Use resistant varieties. Control whitefly vectors. Remove infected plants immediately."
+    },
+    {
+      "id": "bacterial_wilt",
+      "name": "Bacterial Wilt",
+      "type": "disease",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "BABY_POTATO_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01"
+      ],
+      "conditions": {
+        "temp_min": 25,
+        "temp_max": 35,
+        "humidity_min": 70,
+        "rainfall_min": 15
+      },
+      "severity_base": "High",
+      "description": "Soil-borne bacterial disease causing rapid wilting without yellowing.",
+      "prevention": "Use resistant rootstock. Avoid waterlogged conditions. Practice crop rotation."
+    },
+    {
+      "id": "pod_borer",
+      "name": "Pod Borer (Helicoverpa)",
+      "type": "pest",
+      "affected_crops": [
+        "MOONG_01",
+        "URAD_01",
+        "COWPEA_01",
+        "GUAR_01",
+        "SOYBEAN_01",
+        "MOONG_DAL_01",
+        "URAD_DAL_01",
+        "COWPEA_VEG_01",
+        "FRENCH_BEANS_01",
+        "CLUSTER_BEANS_01",
+        "MASOOR_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 35,
+        "humidity_min": 50
+      },
+      "severity_base": "High",
+      "description": "Larvae bore into pods and feed on developing seeds, causing major yield loss.",
+      "prevention": "Use pheromone traps for monitoring. Apply NPV (Nuclear Polyhedrosis Virus). Hand-pick larvae."
+    },
+    {
+      "id": "fruit_borer",
+      "name": "Fruit Borer",
+      "type": "pest",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "OKRA_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01",
+        "BITTER_GOURD_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 30,
+        "humidity_min": 60
+      },
+      "severity_base": "High",
+      "description": "Larvae bore into fruits, making them unmarketable.",
+      "prevention": "Install pheromone traps. Use Bt spray. Collect and destroy damaged fruits."
+    },
+    {
+      "id": "leaf_miner",
+      "name": "Leaf Miner",
+      "type": "pest",
+      "affected_crops": [
+        "SPINACH_01",
+        "CORIANDER_01",
+        "FENUGREEK_01",
+        "LETTUCE_01",
+        "AMARANTH_01",
+        "MUSTARD_GREENS_01",
+        "DILL_01",
+        "MINT_01",
+        "SPRING_ONION_01",
+        "DRUMSTICK_LEAVES_01"
+      ],
+      "conditions": {
+        "temp_min": 18,
+        "temp_max": 32,
+        "humidity_min": 45
+      },
+      "severity_base": "Moderate",
+      "description": "Tiny larvae tunnel inside leaves, leaving pale winding trails and reducing marketability.",
+      "prevention": "Remove infested leaves promptly. Apply spinosad or abamectin. Use row covers for young plants."
+    },
+    {
+      "id": "carrot_fly",
+      "name": "Carrot Fly (Root Maggot)",
+      "type": "pest",
+      "affected_crops": [
+        "CARROT_01",
+        "RADISH_01",
+        "TURNIP_01",
+        "BEETROOT_01",
+        "BABY_POTATO_01"
+      ],
+      "conditions": {
+        "temp_min": 10,
+        "temp_max": 25,
+        "humidity_min": 55
+      },
+      "severity_base": "Moderate",
+      "description": "Larvae tunnel into roots causing rot, stunting, and making roots unmarketable.",
+      "prevention": "Use row covers. Sow after peak adult flight (late April). Apply bifenthrin at sowing. Practice crop rotation."
+    },
+    {
+      "id": "damping_off",
+      "name": "Damping Off (Pythium)",
+      "type": "disease",
+      "affected_crops": [
+        "SPINACH_01",
+        "CORIANDER_01",
+        "FENUGREEK_01",
+        "LETTUCE_01",
+        "AMARANTH_01",
+        "MINT_01",
+        "DILL_01",
+        "MICROGREENS_01",
+        "RADISH_01",
+        "SPRING_ONION_01"
+      ],
+      "conditions": {
+        "temp_min": 18,
+        "temp_max": 30,
+        "humidity_min": 80,
+        "rainfall_min": 5
+      },
+      "severity_base": "High",
+      "description": "Soil-borne fungal disease that kills seedlings at or just below soil level.",
+      "prevention": "Use well-drained soil. Avoid overwatering. Treat seeds with Trichoderma. Ensure good air circulation."
+    },
+    {
+      "id": "cucumber_mosaic_virus",
+      "name": "Cucumber Mosaic Virus (CMV)",
+      "type": "disease",
+      "affected_crops": [
+        "CUCUMBER_01",
+        "RIDGE_GOURD_01",
+        "BITTER_GOURD_01",
+        "SPONGE_GOURD_01",
+        "BOTTLEGOURD_01",
+        "PUMPKIN_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01"
+      ],
+      "conditions": {
+        "temp_min": 20,
+        "temp_max": 35,
+        "humidity_min": 50
+      },
+      "severity_base": "High",
+      "description": "Viral disease causing mosaic patterns on leaves, stunting, and fruit deformation. Spread by aphids.",
+      "prevention": "Control aphid vectors. Remove infected plants immediately. Use resistant varieties. Avoid planting near other cucurbits."
+    },
+    {
+      "id": "thrips",
+      "name": "Thrips",
+      "type": "pest",
+      "affected_crops": [
+        "OKRA_01",
+        "TOMATO_01",
+        "BRINJAL_01",
+        "CAPSICUM_01",
+        "GREEN_CHILLI_01",
+        "SUNFLOWER_01",
+        "ONION_01",
+        "SPRING_ONION_01",
+        "CORIANDER_01"
+      ],
+      "conditions": {
+        "temp_min": 25,
+        "temp_max": 40,
+        "humidity_min": 30,
+        "rainfall_max": 5
+      },
+      "severity_base": "Moderate",
+      "description": "Tiny insects that scar leaves and flowers, spreading TSWV virus in chillis and tomatoes.",
+      "prevention": "Use blue sticky traps. Apply spinosad. Maintain soil moisture to reduce dust conditions."
+    },
+    {
+      "id": "red_spider_mite",
+      "name": "Red Spider Mite",
+      "type": "pest",
+      "affected_crops": [
+        "TOMATO_01",
+        "BRINJAL_01",
+        "OKRA_01",
+        "BEANS_01",
+        "FRENCH_BEANS_01",
+        "CUCUMBER_01",
+        "BITTER_GOURD_01",
+        "BABY_CORN_01",
+        "CAPSICUM_01"
+      ],
+      "conditions": {
+        "temp_min": 28,
+        "temp_max": 42,
+        "humidity_min": 20,
+        "rainfall_max": 3
+      },
+      "severity_base": "Moderate",
+      "description": "Mites cause yellow stippling on leaves, webbing on undersides. Thrive in hot, dry conditions.",
+      "prevention": "Spray water on leaf undersides. Apply acaricides (dicofol). Increase irrigation. Use neem oil."
+    }
+  ]
+}
