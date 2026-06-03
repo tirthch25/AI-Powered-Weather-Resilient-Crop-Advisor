@@ -1,0 +1,17 @@
+requests
+pandas
+numpy
+scikit-learn
+fastapi
+uvicorn
+jinja2
+python-multipart
+pyarrow
+torch
+xgboost
+joblib
+matplotlib
+seaborn
+ollama
+google-genai
+python-dotenv
