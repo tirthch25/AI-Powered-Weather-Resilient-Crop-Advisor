@@ -1,4 +1,6 @@
 import os
+import logging
+import traceback
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -9,6 +11,8 @@ from datetime import datetime
 from starlette.requests import Request
 from dotenv import load_dotenv
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 from src.weather.fetcher import fetch_weather
 from src.ml.pipeline import add_agri_features
@@ -336,6 +340,7 @@ def recommend(request: RegionRequest):
                     crop_rec['growing_tip'] = getattr(crop_detail, 'growing_tip', '')
                     crop_rec['duration_range'] = list(crop_detail.duration_range)
             except Exception:
+                logger.warning("[crop detail lookup failed]\n" + traceback.format_exc())
                 crop_rec.setdefault('growing_tip', '')
                 crop_rec.setdefault('duration_range', [])
             
@@ -375,7 +380,7 @@ def recommend(request: RegionRequest):
                 )
                 llm_powered = True
             except Exception as _llm_e:
-                pass  # Silently skip — explanations are bonus, not critical
+                logger.warning(f"[LLM explainer failed — skipping explanations]\n" + traceback.format_exc())
         
         # 9. Build month-wise forecast (Jan-Dec) for the climate chart
         #    Temperature: live API anchor for current month + zone seasonal shape offset
@@ -418,7 +423,7 @@ def recommend(request: RegionRequest):
                     "humidity":    clim["humidity"],
                 })
         except Exception:
-            pass
+            logger.warning("[monthly forecast build failed]\n" + traceback.format_exc())
         forecast["monthly_forecast"] = monthly_forecast
         
         # 10. Build response
@@ -455,6 +460,7 @@ def recommend(request: RegionRequest):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/recommend endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -495,6 +501,7 @@ def get_forecast(region_id: str, days: int = 7):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/forecast endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Forecast error: {str(e)}")
 
 
@@ -553,6 +560,7 @@ def assess_risk(request: RiskRequest):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/risk-assessment endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Risk assessment error: {str(e)}")
 
 
@@ -600,6 +608,7 @@ def get_pest_warnings(region_id: str, crop_id: Optional[str] = None):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/pest-warnings endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Pest warning error: {str(e)}")
 
 
@@ -639,6 +648,7 @@ def get_planting_calendar_endpoint(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/planting-calendar endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Calendar error: {str(e)}")
 
 
@@ -702,6 +712,7 @@ def get_current_weather(region_id: str):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[/weather/now endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Weather fetch error: {str(e)}")
 
 

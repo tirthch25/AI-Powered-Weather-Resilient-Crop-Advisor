@@ -12,6 +12,7 @@ Set LLM_PROVIDER=ollama (default) or LLM_PROVIDER=gemini in .env.
 import os
 import json
 import logging
+import traceback
 import re
 from typing import Dict, List
 from dotenv import load_dotenv
@@ -31,6 +32,16 @@ GEMINI_MODEL = "gemini-2.0-flash-lite"
 
 _ollama_client = None
 _gemini_client = None
+
+# ── Gemini key rotation ───────────────────────────────────────────────────────
+_GEMINI_KEYS = [
+    k for k in [
+        os.getenv("GEMINI_API_KEY"),
+        os.getenv("GEMINI_API_KEY_2"),
+        os.getenv("GEMINI_API_KEY_3"),
+    ] if k
+]
+_gemini_key_index = 0
 
 
 # ── Ollama client ─────────────────────────────────────────────────────────────
@@ -57,20 +68,30 @@ def _get_ollama_client():
 # ── Gemini fallback client ────────────────────────────────────────────────────
 
 def _get_gemini_client():
-    global _gemini_client
-    if _gemini_client is not None:
-        return _gemini_client
+    """Return a Gemini client using round-robin key rotation."""
+    global _gemini_client, _gemini_key_index
+    if not _GEMINI_KEYS:
+        logger.warning("No Gemini API keys found — add GEMINI_API_KEY to .env")
+        return None
     try:
         from google import genai
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            return None
+        api_key = _GEMINI_KEYS[_gemini_key_index % len(_GEMINI_KEYS)]
         _gemini_client = genai.Client(api_key=api_key)
-        logger.info(f"Gemini explainer fallback client loaded ({GEMINI_MODEL})")
+        logger.info(
+            f"Gemini explainer client loaded (key #{_gemini_key_index % len(_GEMINI_KEYS) + 1} "
+            f"of {len(_GEMINI_KEYS)}, model={GEMINI_MODEL})"
+        )
         return _gemini_client
     except Exception as e:
         logger.warning(f"Gemini explainer client failed: {e}")
         return None
+
+
+def _rotate_gemini_key() -> None:
+    """Advance to the next Gemini key and reset the cached client."""
+    global _gemini_key_index, _gemini_client
+    _gemini_key_index = (_gemini_key_index + 1) % max(len(_GEMINI_KEYS), 1)
+    _gemini_client = None
 
 
 def _resolve_client():
@@ -151,7 +172,14 @@ def generate_crop_explanation(
         return json.loads(text)
 
     except Exception as e:
-        logger.debug(f"LLM explanation failed for {crop_name} ({provider}): {e}")
+        err_str = str(e).lower()
+        if provider == "gemini" and any(kw in err_str for kw in ("quota", "429", "rate")):
+            logger.warning(f"Gemini rate limit hit in explainer — rotating key")
+            _rotate_gemini_key()
+        logger.warning(
+            f"LLM explanation failed for {crop_name} ({provider}): {e}\n"
+            + traceback.format_exc()
+        )
         return {}
 
 

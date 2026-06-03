@@ -17,6 +17,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ def _fetch_from_api(latitude: float, longitude: float, days: int) -> Optional[pd
         df["temp_min"] = df["temp_min"].ffill().fillna(20.0)
         return df
     except Exception as e:
-        logger.error(f"Open-Meteo API error: {e}")
+        logger.error(f"Open-Meteo API error: {e}\n" + traceback.format_exc())
         return None
 
 
@@ -119,6 +120,7 @@ def _enrich(df: pd.DataFrame, region_id: Optional[str], season: Optional[str]) -
         clim = get_monthly_climate(zone, current_month)
         base_humidity = clim["humidity"]
     except Exception:
+        logger.warning("[humidity zone lookup failed]\n" + traceback.format_exc())
         base_humidity = 60.0
 
     # Add some daily variation correlated with rainfall
@@ -172,6 +174,7 @@ def _historical_baseline_as_weather(
         daily_rain = clim["rainfall"] / 30.0   # monthly → daily
         humidity = clim["humidity"]
     except Exception:
+        logger.warning("[historical baseline zone lookup failed]\n" + traceback.format_exc())
         avg_temp   = 28.0
         daily_rain = 3.0
         humidity   = 60.0

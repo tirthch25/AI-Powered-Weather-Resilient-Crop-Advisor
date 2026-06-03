@@ -19,6 +19,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import logging
+import traceback
 
 from src.crops.database import crop_db, get_regional_enrichment
 from src.crops.models import CropInfo
@@ -88,7 +89,7 @@ def _load_crop_ml_model():
             logger.info("Loaded ML crop suitability model")
         return model
     except Exception as e:
-        logger.debug(f"ML model not available: {e}")
+        logger.warning(f"ML model load failed: {e}\n" + traceback.format_exc())
         return None
 
 
@@ -121,7 +122,7 @@ def _get_ml_score(ml_model, crop, region_id, season, soil, avg_temp, rainfall, d
         score = ml_model.predict_score(features)
         return max(0, min(100, score))
     except Exception as e:
-        logger.debug(f"ML prediction failed for {crop.crop_id}: {e}")
+        logger.warning(f"ML prediction failed for {crop.crop_id}: {e}\n" + traceback.format_exc())
         return None
 
 
@@ -231,7 +232,7 @@ def recommend_crops(
             else:
                 logger.info("LLM gate unavailable — using rule-based list")
         except Exception as e:
-            logger.warning(f"LLM gate error (falling back): {e}")
+            logger.warning(f"LLM gate error (falling back): {e}\n" + traceback.format_exc())
     # ── End Gates ────────────────────────────────────────────────────────────
 
     # Filter by soil if provided
@@ -269,6 +270,7 @@ def recommend_crops(
             hist = get_climate_for_region(region_id, season)
             avg_humidity = hist.get("avg_humidity", 65.0)
         except Exception:
+            logger.warning("[humidity lookup failed]\n" + traceback.format_exc())
             avg_humidity = 65.0
 
     weather_conditions = {

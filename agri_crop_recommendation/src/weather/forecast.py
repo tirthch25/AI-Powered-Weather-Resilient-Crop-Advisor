@@ -14,6 +14,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, Optional
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ def _climatology_forecast(weather_df: pd.DataFrame, planning_days: int, region_i
             f"(temperature is 100%% live API -- zone temp NOT blended)"
         )
     except Exception as e:
-        logger.debug(f"Zone humidity lookup failed: {e}")
+        logger.warning(f"Zone humidity lookup failed: {e}\n" + traceback.format_exc())
 
     # ── Live API signals -- these ARE the district's real temperatures ────────
     avg_temp_api     = float(weather_df["temp_avg"].mean())

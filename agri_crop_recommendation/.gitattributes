@@ -1,0 +1,2 @@
+*.joblib filter=lfs diff=lfs merge=lfs -text
+agri_crop_recommendation/models/crop_suitability/rf_model.joblib filter=lfs diff=lfs merge=lfs -text

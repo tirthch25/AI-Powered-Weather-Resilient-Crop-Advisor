@@ -1,44 +1,40 @@
-# Python
+# ── Large data files ─────────────────────────────────────────────────────────
+agri_crop_recommendation/data/weather/district/   # 7000+ parquet files (~GB)
+*.parquet
+*.tar
+*.gz
+*.zip
+
+# ── Python cache ──────────────────────────────────────────────────────────────
 __pycache__/
-**/__pycache__/
-*.py[cod]
+*.pyc
 *.pyo
 *.pyd
 .Python
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
 
-# Virtual environments
-.venv/
+# ── Virtual environments ──────────────────────────────────────────────────────
 venv/
+.venv/
 env/
+.env
+agri_crop_recommendation/.env
 
-# IDE / Editor
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Large data files — NOT committed to git
-# District historical weather parquet files (~1.8 GB total)
-agri_crop_recommendation/data/weather/district/
-
-# Large ML training data files (>100 MB, excluded from GitHub)
-agri_crop_recommendation/data/ml/training/crop_suitability/crop_suitability_data.csv
-
-# Jupyter
-*.ipynb_checkpoints/
-
-# OS
-.DS_Store
+*.DS_Store
 Thumbs.db
 
-# Environment
-.env
-*.env
-
-# Logs
+# ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
+logs/
+
+# ── Installed packages (inside project) ──────────────────────────────────────
+agri_crop_recommendation/Lib/
+agri_crop_recommendation/Scripts/
+agri_crop_recommendation/Include/
+agri_crop_recommendation/lib/
+agri_crop_recommendation/bin/
+site-packages/
+*.dist-info/
+*.egg-info/

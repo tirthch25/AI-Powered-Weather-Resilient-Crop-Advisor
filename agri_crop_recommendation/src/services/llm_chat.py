@@ -18,6 +18,7 @@ are unavailable.
 
 import os
 import logging
+import traceback
 import re
 import time
 from typing import Optional, List, Dict, Any, Tuple, Generator
@@ -46,6 +47,16 @@ _WEATHER_CACHE_TTL = 300  # 5 minutes
 # ── Cached clients ───────────────────────────────────────────────────────────
 _ollama_client = None
 _gemini_client = None
+
+# ── Gemini key rotation ───────────────────────────────────────────────────────
+_GEMINI_KEYS = [
+    k for k in [
+        os.getenv("GEMINI_API_KEY"),
+        os.getenv("GEMINI_API_KEY_2"),
+        os.getenv("GEMINI_API_KEY_3"),
+    ] if k  # filter out blank / missing keys
+]
+_gemini_key_index = 0
 
 
 # ── System persona ───────────────────────────────────────────────────────────
@@ -86,21 +97,34 @@ def _get_ollama_client():
 # ── Gemini fallback client ───────────────────────────────────────────────────
 
 def _get_gemini_client():
-    """Return a Gemini client or None if API key is missing."""
-    global _gemini_client
-    if _gemini_client is not None:
-        return _gemini_client
+    """
+    Return a Gemini client using the next available API key (round-robin).
+    Returns None if no valid keys are configured.
+    """
+    global _gemini_client, _gemini_key_index
+    if not _GEMINI_KEYS:
+        logger.warning("No Gemini API keys found — add GEMINI_API_KEY to .env")
+        return None
     try:
         from google import genai
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            return None
+        api_key = _GEMINI_KEYS[_gemini_key_index % len(_GEMINI_KEYS)]
         _gemini_client = genai.Client(api_key=api_key)
-        logger.info(f"Gemini fallback client loaded ({GEMINI_MODEL})")
+        logger.info(
+            f"Gemini client loaded (key #{_gemini_key_index % len(_GEMINI_KEYS) + 1} "
+            f"of {len(_GEMINI_KEYS)}, model={GEMINI_MODEL})"
+        )
         return _gemini_client
     except Exception as e:
-        logger.warning(f"Gemini fallback client failed: {e}")
+        logger.warning(f"Gemini client failed: {e}")
         return None
+
+
+def _rotate_gemini_key() -> None:
+    """Advance to the next Gemini key and reset the cached client."""
+    global _gemini_key_index, _gemini_client
+    _gemini_key_index = (_gemini_key_index + 1) % max(len(_GEMINI_KEYS), 1)
+    _gemini_client = None
+    logger.info(f"Rotated to Gemini key #{_gemini_key_index + 1}")
 
 
 def _resolve_client() -> Tuple[str, Any]:
@@ -310,7 +334,23 @@ def answer_farmer_question(
         return answer, _cap_history(history, question, answer)
 
     except Exception as e:
-        logger.warning(f"Chat response failed ({provider}): {e}")
+        err_str = str(e).lower()
+        # On Gemini rate-limit / quota errors, rotate key and retry once
+        if provider == "gemini" and any(kw in err_str for kw in ("quota", "429", "rate")):
+            logger.warning(f"Gemini rate limit hit — rotating key and retrying")
+            _rotate_gemini_key()
+            new_client = _get_gemini_client()
+            if new_client:
+                try:
+                    contents = _history_to_gemini_contents(history, system_text, question)
+                    response = new_client.models.generate_content(
+                        model=GEMINI_MODEL, contents=contents, config=_NO_THINK_CONFIG
+                    )
+                    answer = _clean_answer(response.text)
+                    return answer, _cap_history(history, question, answer)
+                except Exception as e2:
+                    logger.warning(f"Retry with rotated Gemini key also failed: {e2}")
+        logger.warning(f"Chat response failed ({provider}): {e}\n" + traceback.format_exc())
         err_msg = "I'm having trouble connecting to the AI service right now. Please try again in a moment."
         return err_msg, history
 
@@ -383,6 +423,11 @@ def stream_farmer_answer(
         yield f"data: [DONE]{json.dumps(updated_history)}\n\n"
 
     except Exception as e:
-        logger.warning(f"Stream chat failed ({provider}): {e}")
+        err_str = str(e).lower()
+        # On Gemini rate-limit / quota errors, rotate key and retry once (non-streaming)
+        if provider == "gemini" and any(kw in err_str for kw in ("quota", "429", "rate")):
+            logger.warning("Gemini rate limit hit during stream — rotating key")
+            _rotate_gemini_key()
+        logger.warning(f"Stream chat failed ({provider}): {e}\n" + traceback.format_exc())
         yield "data: [ERROR] I'm having trouble connecting to the AI service right now. Please try again.\n\n"
         yield "data: [DONE]\n\n"
