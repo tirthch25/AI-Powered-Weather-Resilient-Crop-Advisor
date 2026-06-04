@@ -71,64 +71,92 @@ The **Indian Farmer Crop Recommendation System** is an AI-powered agricultural a
 
 ## 2. System Architecture
 
-The system follows a **layered architecture** pattern:
+The system follows a **multi-layer AI architecture** pattern with 7 distinct layers:
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        PRESENTATION LAYER                               │
-│          Web Browser  ←→  index.html + app.js + style.css              │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │  HTTP / REST
-┌────────────────────────────────▼────────────────────────────────────────┐
-│                         API LAYER (FastAPI)                              │
-│         POST /recommend │ GET /forecast │ POST /risk-assessment         │
-│         GET /pest-warnings │ GET /planting-calendar │ GET /regions      │
-└────┬──────────────┬─────────────┬──────────────┬──────────────┬────────┘
-     │              │             │              │              │
-┌────▼───┐  ┌───────▼────┐ ┌─────▼──────┐ ┌───▼────┐  ┌──────▼──────┐
-│Weather │  │Crop Rec.   │ │Risk        │ │Pest    │  │Planting     │
-│Forecast│  │Engine      │ │Assessment  │ │Warning │  │Calendar     │
-│(ML)    │  │(ML+Rules)  │ │Engine      │ │System  │  │             │
-└────────┘  └────────────┘ └────────────┘ └────────┘  └─────────────┘
-     │              │
-┌────▼───────────────▼─────────────────────────────────────────────────┐
-│                       DATA LAYER                                       │
-│  Crop DB (50+ crops) │ Region Data (640 districts) │                  │
-│  Historical Weather (Parquet) │ Soil Info │ crop_knowledge.json       │
-└───────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph L1["🖥️  LAYER 1 — PRESENTATION LAYER  (Web Browser / SPA)"]
+        UI["<b>Web Browser SPA</b><br/>index.html · app.js · style.css · Chart.js v4.4.0<br/>─────────────────────────────────────────────────────<br/><b>INPUTS:</b>  State / District · Irrigation · Soil Type · Soil pH · Planning Days<br/><b>OUTPUTS:</b>  Crop Cards · Weather Chart · NDVI Chart · Risk Badges<br/>Pest Alerts · Planting Calendar · AI Chat (LLaMA 3.2 / Gemini)"]
+    end
+
+    L1 -->|"HTTP / REST  (JSON)"| L2
+
+    subgraph L2["🔌  LAYER 2 — API GATEWAY  (FastAPI v1.0 + Uvicorn ASGI)"]
+        API["<b>POST /recommend</b>  ·  <b>GET /forecast/{region_id}</b>  ·  <b>POST /risk-assessment</b><br/><b>GET /pest-warnings/{region_id}</b>  ·  <b>GET /planting-calendar/{crop_id}</b><br/><b>POST /chat/stream</b> (SSE)  ·  <b>GET /regions</b>  ·  <b>GET /weather/now/{region_id}</b>"]
+    end
+
+    L2 --> L3A
+    L2 --> L3B
+    L2 --> L3C
+
+    subgraph L3["🧠  LAYER 3 — INTELLIGENCE LAYER"]
+        subgraph L3A["🌦️ Weather Forecasting Engine  (src/weather/forecast.py)"]
+            WF["<b>Days 1–7:</b>   Live Open-Meteo API  (fetcher.py)<br/><b>Days 8–14:</b>  LSTM + XGBoost Ensemble<br/><b>Days 15–90:</b> Historical Climatology Blend  (history.py)<br/>───────────────────────────────────────<br/>Feature Engineering: temp_avg · GDD · dry_spell_days · rainfall_7d"]
+        end
+        subgraph L3B["🌾 Crop Recommendation Engine  (recommender.py)"]
+            RE["<b>Filter Pipeline:</b>  50+ crops → Season → Region Gate → Soil Compat → Duration<br/>───────────────────────────────────────<br/><b>Scoring Blend:</b>  60% Random Forest ML  +  40% Rule-Based<br/><b>Rule Weights:</b>  Temp 25% · Water 25% · Soil 15% · Regional 15% · Season 10% · Drought 10%<br/>───────────────────────────────────────<br/>Returns: <b>Top 15 crops</b> with suitability scores (0–100)"]
+        end
+        subgraph L3C["🤖 LLM Intelligence  (llm_filter · llm_explainer · llm_chat)"]
+            LLM["<b>LLM Filter:</b>   Which crops are IMPOSSIBLE in district? → JSON approved/removed IDs<br/>Primary: LLaMA 3.2 (Ollama local)  |  Fallback: Gemini 2.0 Flash<br/>Safety net: less than 40% approved → revert to unfiltered list<br/>───────────────────────────────────────<br/><b>LLM Explainer:</b>  Farmer-friendly explanations (English · Hindi · Marathi) for top 3 crops<br/><b>LLM Chat:</b>  Streaming SSE · 6-turn history · live weather context injected per turn"]
+        end
+    end
+
+    L3A --> L4
+    L3B --> L4
+    L3C --> L4
+
+    subgraph L4["⚙️  LAYER 4 — SERVICES LAYER"]
+        RA["<b>⚠️ Risk Assessment</b><br/>risk.py<br/>────────────<br/>Drought Risk: 40%<br/>Temp Stress: 35%<br/>Extreme Events: 25%<br/>────────────<br/>Levels: Low / Medium<br/>High / Critical"]
+        PW["<b>🐛 Pest and Disease Warnings</b><br/>pests.py<br/>────────────<br/>15+ pests and diseases<br/>Weather trigger matching<br/>Humidity + Temp thresholds<br/>────────────<br/>Severity: Low to Critical"]
+        PC["<b>📅 Planting Calendar</b><br/>calendar.py<br/>────────────<br/>4 growth phases:<br/>Germination (10%)<br/>Vegetative (30%)<br/>Flowering (30%)<br/>Maturity (30%)<br/>Season sowing windows"]
+        SAT["<b>🛰️ Satellite Intelligence</b><br/>────────────<br/>NASA POWER<br/>NDVI Trend<br/>────────────<br/>Open-Meteo<br/>Soil Moisture<br/>0 to 7 cm depth"]
+    end
+
+    subgraph L5["🤖  LAYER 5 — ML MODELS LAYER"]
+        LSTM["<b>🧠 LSTM Weather Model</b><br/>lstm_weather.py<br/>models/weather_lstm/<br/>────────────<br/>Framework: PyTorch<br/>Arch: 2-layer LSTM<br/>Hidden size: 128<br/>Lookback: 30 days<br/>Output: 7-day forecast<br/>Loss: MSE<br/>Optimizer: Adam + StepLR<br/>Norm: Z-score per feature"]
+        RF["<b>🌲 Random Forest</b><br/><b>Crop Suitability Model</b><br/>predictor.py<br/>models/crop_suitability/<br/>────────────<br/>Framework: Scikit-learn<br/>17 input features<br/>50+ crops × 640 regions<br/>× 50 weather scenarios<br/>Output: score 0 to 100"]
+        XGB["<b>⚡ XGBoost Weather</b><br/><b>Forecast Model</b><br/>xgboost_weather.py<br/>models/weather_xgboost/<br/>────────────<br/>Framework: XGBoost<br/>Gradient Boosted Trees<br/>50+ lag and rolling features<br/>Lag: 1,3,7,14,30 days<br/>Output: temp + rainfall"]
+    end
+
+    L4 --> L5
+    L5 --> L6
+
+    subgraph L6["💾  LAYER 6 — DATA LAYER"]
+        HW["<b>📊 Historical Weather</b><br/>data/weather/district/<br/>────────────<br/>~40,180 records<br/>10 years (2014–2024)<br/>Apache Parquet format<br/>640+ districts"]
+        RD["<b>🌍 Region Database</b><br/>data/regions.json<br/>────────────<br/>640+ districts<br/>28 states + 8 UTs<br/>GPS coordinates<br/>Climate zones<br/>Soil defaults"]
+        CK["<b>🌱 Crop Knowledge Base</b><br/>crop_knowledge.json<br/>src/crops/database.py<br/>────────────<br/>50+ crops (CropInfo)<br/>Pest and Disease DB<br/>Growth phases<br/>Care tips per phase"]
+        RE2["<b>🗺️ Regional Enrichment</b><br/>regional_crops.json<br/>────────────<br/>Gemini-powered<br/>Approved crop IDs<br/>per district"]
+    end
+
+    subgraph L7["🌐  LAYER 7 — EXTERNAL DATA SOURCES"]
+        OM["<b>Open-Meteo API</b><br/>Live: last 7 days<br/>Historical: 2014–2024<br/>Free tier REST"]
+        NASA["<b>NASA POWER API</b><br/>NDVI satellite data<br/>Soil moisture<br/>Remote sensing"]
+        OLL["<b>Ollama (Local)</b><br/>LLaMA 3.2<br/>localhost:11434<br/>Private and free"]
+        GEM["<b>Google Gemini API</b><br/>gemini-2.0-flash-lite<br/>Fallback LLM<br/>Cloud API key"]
+    end
+
+    L6 --> L7
 ```
 
 ### 2.1 Request Flow (Recommendation)
 
-```
-User Input → POST /recommend
-    ↓
-1. Resolve Region (ID or GPS coordinates)
-    ↓
-2. Fetch Live Weather (Open-Meteo API, 7 days)
-    ↓
-3. Auto-Detect Season (Kharif / Rabi / Zaid)
-    ↓
-4. Apply Agricultural Feature Engineering
-    ↓
-5. ML Forecast (LSTM + XGBoost ensemble, up to 90 days)
-    ↓
-5b. Fetch Satellite Data (NASA POWER NDVI + Open-Meteo soil moisture) ← NEW
-    ↓
-6. Determine Soil (user-provided or region default)
-    ↓
-7. Score Crops (Random Forest ML + Rule-Based, blended 60:40)
-    ↓
-7b. Predict Yield per Crop (XGBoost Yield Predictor, q/ha) ← NEW
-    ↓
-8. Risk Assessment per Crop
-    ↓
-9. Pest/Disease Warnings per Crop
-    ↓
-10. Generate Planting Calendars
-    ↓
-JSON Response → Frontend renders UI (yield badge + NDVI chart)
-```
+| Step | Component | Detail |
+|------|-----------|--------|
+| **[1]** | **Region Resolver** | `RegionManager.get_region_profile(region_id)` — or GPS lookup within 150 km radius |
+| **[2]** | **Live Weather Fetch** | `fetcher.py` → Open-Meteo API, last 7 days of daily weather |
+| **[3]** | **Season Detection** | `detect_season()` → Kharif (Jun–Sep) / Rabi (Oct–Feb) / Zaid (Mar–May) |
+| **[4]** | **Feature Engineering** | `add_agri_features()` → `temp_avg`, `gdd`, `dry_spell_days`, `rainfall_7d` |
+| **[5]** | **ML Weather Forecast** | LSTM + XGBoost ensemble → up to 90-day horizon; climatology fallback |
+| **[5b]** | **Satellite Data** *(v2.9)* | NASA POWER NDVI trend + Open-Meteo soil moisture (0–7 cm depth) |
+| **[6]** | **Soil Resolution** | User-provided values OR `region.get_default_soil()` |
+| **[7]** | **LLM Regional Filter** *(v2.9)* | LLaMA 3.2 removes climatically impossible crops; safety net prevents over-filtering |
+| **[7b]** | **Crop Scoring** | `CropSuitabilityRF.predict_score()` (60%) + `calculate_suitability_score()` (40%) → Top 15 |
+| **[7c]** | **Yield Prediction** *(v2.9)* | XGBoost Yield Predictor → expected yield in q/ha per crop |
+| **[8]** | **Risk Assessment** | `RiskAssessmentEngine` → Drought (40%) + Temp Stress (35%) + Extreme Events (25%) |
+| **[9]** | **Pest & Disease Warnings** | `PestWarningSystem` → weather-triggered alerts per crop (Low → Critical severity) |
+| **[10]** | **Planting Calendar** | `PlantingCalendar` → 4 growth phases with care tips and sowing window dates |
+| **[11]** | **LLM Explainer** *(v2.9)* | `generate_bulk_explanations()` → farmer-friendly explanations for top 3 crops |
+| **→** | **JSON Response** | Frontend renders full dashboard: yield badge + NDVI chart + risk badges + pest alerts |
 
 ---
 
@@ -148,12 +176,12 @@ Provides a single-page web application that allows farmers (or agricultural advi
 | **Overview Cards** | `#overview` | Summary stats (region, season, temp, rain, soil, forecast source) |
 | **Season Guidance** | `#guidance-section` | Contextual planting guidance |
 | **Weather Chart** | `#forecast-section` | 12-month weather chart (Chart.js) |
-| **Satellite Intelligence** | `#satellite-section` | NDVI trend chart + soil moisture stats *(v3.0)* |
-| **Recommended Crops** | `#crops-section` | Top 10 crop cards with suitability scores + **yield badges** *(v3.0)* |
+| **Satellite Intelligence** | `#satellite-section` | NDVI trend chart + soil moisture stats *(v2.9)* |
+| **Recommended Crops** | `#crops-section` | Top **15** crop cards with suitability scores + **yield badges** *(v2.9)* |
 | **Risk Assessment** | `#risk-section` | Risk breakdown per crop |
 | **Pest/Disease Alerts** | `#pest-section` | Active pest/disease warnings |
 | **Planting Calendar** | `#calendar-section` | Timeline milestones per crop |
-| **AI Farming Chat** | `#chat-section` | **LLaMA 3.2** (local) / Gemini fallback streaming Q&A |
+| **AI Farming Chat** | `#chat-section` | **LLaMA 3.2** (local) / Gemini fallback — context-injected streaming Q&A *(v2.9)* |
 
 ### 3.3 Input Form Fields
 
@@ -1068,17 +1096,21 @@ The `generate_bulk_explanations()` function generates explanations for the **top
 
 ### 18.1 Purpose
 
-Powers an interactive, context-aware **AI farming Q&A chat** that answers free-form farmer questions grounded in the farmer's specific district, season, soil, weather, and recommended crops. Supports multi-turn conversation history and real-time streaming.
+Powers an interactive, **context-aware AI farming Q&A chat** that answers free-form farmer questions grounded in the farmer's specific district, season, soil, live weather, and recommended crops. It uses **prompt-based context injection** — farm-specific data is assembled into a structured context block and prepended to every LLM prompt, ensuring answers are anchored to the farmer's actual situation. Supports multi-turn conversation history and real-time streaming via SSE.
+
+> **Note:** This module uses **prompt-based grounding** (context injection), not Retrieval-Augmented Generation (RAG) or model fine-tuning. The LLM (LLaMA 3.2 / Gemini) is used as-is; no vector database or embedding layer is involved. RAG-based grounding over the full crop knowledge base is planned for a future version.
 
 ### 18.2 Features
 
 | Feature | Detail |
 |---------|--------|
+| **Prompt-based grounding** | Farm context (district, season, soil, weather, top crops) injected into every prompt as a structured text block |
 | **Multi-turn history** | Retains last 6 conversation turns (configurable via `_MAX_HISTORY_TURNS`) |
 | **Streaming (SSE)** | Tokens streamed via Server-Sent Events for real-time display |
-| **Live weather context** | Injects real-time weather (temperature, rainfall) into every prompt |
+| **Live weather context** | Fetches real-time weather from Open-Meteo and injects into each prompt turn |
 | **Weather cache** | 5-minute TTL cache avoids re-fetching weather on every chat turn |
 | **Grounded persona** | System prompt enforces Indian agri advisor tone, 200-word limit, bullet points |
+| **Gemini key rotation** | Automatically rotates across up to 3 Gemini API keys on rate-limit errors |
 
 ### 18.3 Context Injected into Each Prompt
 
@@ -1131,6 +1163,7 @@ Context block sent to LLM per turn:
 
 | Feature | Description |
 |---------|-------------|
+| **RAG-based Farmer Chat** | Replace prompt-based context injection with a full Retrieval-Augmented Generation (RAG) pipeline — index `crop_knowledge.json`, regional data, and pest/disease DB into a vector store (e.g., ChromaDB / FAISS) so the LLM can retrieve precise, grounded answers from the knowledge base |
 | **Market Integration** | Live mandi (agricultural market) prices via Agmarknet / data.gov.in API |
 | **Long-duration Crops** | Add Wheat, Rice, Cotton, Sugarcane with multi-season planning |
 | **Farmer Profile** | Persistent user accounts to track recommendations over seasons |
