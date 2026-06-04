@@ -3,9 +3,9 @@
 
 **Document Type:** User Module Paper  
 **Project:** Indian Farmer Crop Recommendation System  
-**Version:** 2.8  
+**Version:** 2.9  
 **Prepared By:** HPC Group, CDAC-Pune  
-**Date:** May 2026  
+**Date:** June 2026  
 **Platform:** Web Application (FastAPI + HTML/JS)  
 **Access URL:** `http://localhost:8000`
 
@@ -20,19 +20,22 @@
 5. [Module 3 — Crop Recommendation Engine](#5-module-3--crop-recommendation-engine)
 6. [Module 4 — ML Weather Forecasting (LSTM + XGBoost)](#6-module-4--ml-weather-forecasting-lstm--xgboost)
 7. [Module 5 — Crop Suitability ML Model (Random Forest)](#7-module-5--crop-suitability-ml-model-random-forest)
-8. [Module 6 — Crop Yield Prediction (XGBoost)](#8-module-6--crop-yield-prediction-xgboost-new-in-v30)
-9. [Module 7 — Satellite NDVI & Soil Moisture](#9-module-7--satellite-ndvi--soil-moisture-new-in-v30)
+8. [Module 6 — Crop Yield Prediction (XGBoost)](#8-module-6--crop-yield-prediction-xgboost)
+9. [Module 7 — Satellite NDVI & Soil Moisture](#9-module-7--satellite-ndvi--soil-moisture)
 10. [Module 8 — Risk Assessment Engine](#10-module-8--risk-assessment-engine)
 11. [Module 9 — Pest & Disease Warning System](#11-module-9--pest--disease-warning-system)
 12. [Module 10 — Planting Calendar](#12-module-10--planting-calendar)
 13. [Module 11 — Crop Knowledge Base](#13-module-11--crop-knowledge-base)
 14. [Module 12 — Regional Data & Soil Information](#14-module-12--regional-data--soil-information)
 15. [Module 13 — Historical Weather Data Pipeline](#15-module-13--historical-weather-data-pipeline)
-16. [Data Flow Diagram](#16-data-flow-diagram)
-17. [API Reference Summary](#17-api-reference-summary)
-18. [Technology Stack](#18-technology-stack)
-19. [Directory Structure](#19-directory-structure)
-20. [System Limitations & Future Scope](#20-system-limitations--future-scope)
+16. [Module 14 — LLM Regional Crop Filter](#16-module-14--llm-regional-crop-filter-new-in-v29)
+17. [Module 15 — LLM Crop Explainer](#17-module-15--llm-crop-explainer-new-in-v29)
+18. [Module 16 — LLM Farmer Chat](#18-module-16--llm-farmer-chat-new-in-v29)
+19. [Data Flow Diagram](#19-data-flow-diagram)
+20. [API Reference Summary](#20-api-reference-summary)
+21. [Technology Stack](#21-technology-stack)
+22. [Directory Structure](#22-directory-structure)
+23. [System Limitations & Future Scope](#23-system-limitations--future-scope)
 
 ---
 
@@ -925,7 +928,10 @@ agri_crop_recommendation/
 │   │   ├── recommender.py      # Core recommendation engine
 │   │   ├── risk.py             # Risk assessment engine
 │   │   ├── pests.py            # Pest & disease warning system
-│   │   └── calendar.py         # Planting calendar generator
+│   │   ├── calendar.py         # Planting calendar generator
+│   │   ├── llm_filter.py       # LLM regional crop filter (Ollama/Gemini)
+│   │   ├── llm_explainer.py    # LLM crop explanation generator
+│   │   └── llm_chat.py         # LLM streaming farmer Q&A chat
 │   ├── utils/
 │   │   ├── regions.py          # Region manager & GPS lookup
 │   │   └── seasons.py          # Season detection & water adjustment
@@ -965,33 +971,174 @@ agri_crop_recommendation/
 
 ---
 
-## 18. System Limitations & Future Scope
+## 16. Module 14 — LLM Regional Crop Filter (New in v2.9)
 
-### 18.1 Current Limitations
+**Location:** `src/services/llm_filter.py`
+
+### 16.1 Purpose
+
+Uses a local LLM (Ollama LLaMA 3.2, with Gemini fallback) to filter the candidate crop list down to only crops that are **climatically feasible** in the target district. This solves the regional coverage gap for the 552+ districts that lack explicit crop suitability data in the static database.
+
+### 16.2 How It Works
+
+```
+Rule-based filtered crop list (input)
+    ↓
+LLM prompt: "Which of these crops are climatically IMPOSSIBLE in {district}?"
+    ↓
+LLM returns JSON: { "ok": [...approved IDs], "no": [...removed IDs] }
+    ↓
+Safety net: if < 40% approved OR < 5 crops → fall back to unfiltered list
+    ↓
+Filtered crop list (output)
+```
+
+### 16.3 Key Design Decisions
+
+| Decision | Reason |
+|----------|--------|
+| **Inclusive prompt** | Only reject climatically impossible crops; keep anything that *can* be grown |
+| **Short-duration vegetables always approved** | Okra, brinjal, gourds, spinach grow in any Indian district with irrigation |
+| **40% / 5-crop safety threshold** | Prevents over-aggressive LLM filtering from removing too many crops |
+| **Forced JSON format** | Ollama's `format="json"` mode eliminates parse failures |
+| **State zone hints** | Each state has a compact agricultural zone description embedded in the prompt to improve LLM accuracy |
+
+### 16.4 State Zone Context (Prompt Enrichment)
+
+The filter injects a one-line agricultural zone description per state (e.g., `"MH": "Maharashtra/Marathwada: black cotton soil, semi-arid, crops: jowar, tur, cotton, soybean, bajra"`) to give the LLM regional context without large token overhead. 20 major Indian states are covered.
+
+### 16.5 Provider Configuration
+
+| Setting | Value |
+|---------|-------|
+| Primary | Ollama (`llama3.2` @ `http://localhost:11434`) |
+| Fallback | Gemini (`gemini-2.0-flash-lite`) |
+| Config | `LLM_PROVIDER` in `.env` |
+| Failure mode | Returns `None` → caller uses unfiltered list |
+
+---
+
+## 17. Module 15 — LLM Crop Explainer (New in v2.9)
+
+**Location:** `src/services/llm_explainer.py`
+
+### 17.1 Purpose
+
+Generates short, farmer-friendly **natural language explanations** for the top recommended crops. Each explanation tells the farmer *why* a crop suits their land and what to watch out for — in their regional language where applicable.
+
+### 17.2 Output Format
+
+Returns a JSON object attached to each crop as `llm_explanation`:
+
+```json
+{
+  "english": "Green Gram suits Pune's loamy soils and 320mm monsoon rainfall perfectly.",
+  "why_good": "Thrives in semi-arid monsoon conditions",
+  "watch_out": "Avoid waterlogging during pod-fill stage",
+  "marathi": "... (same content in Marathi, for MH districts)"
+}
+```
+
+### 17.3 Regional Language Support
+
+| State Code | Language Added |
+|-----------|----------------|
+| `MH` | Marathi |
+| `UP`, `MP`, `RJ`, `HR`, `PB`, `UK`, `HP`, `BR`, `JH`, `CG`, `DL`, `GJ` | Hindi |
+| All others | English only |
+
+### 17.4 Bulk Generation
+
+The `generate_bulk_explanations()` function generates explanations for the **top N crops only** (default: 3) to minimise LLM token usage and latency. Remaining crops receive no `llm_explanation` field.
+
+### 17.5 Provider Configuration
+
+| Setting | Value |
+|---------|-------|
+| Primary | Ollama (`llama3.2`) with `format="json"` enforced |
+| Fallback | Gemini (`gemini-2.0-flash-lite`) |
+| Failure mode | Returns `{}` → crop card shown without explanation |
+
+---
+
+## 18. Module 16 — LLM Farmer Chat (New in v2.9)
+
+**Location:** `src/services/llm_chat.py`  
+**API Endpoint:** `POST /chat/stream`
+
+### 18.1 Purpose
+
+Powers an interactive, context-aware **AI farming Q&A chat** that answers free-form farmer questions grounded in the farmer's specific district, season, soil, weather, and recommended crops. Supports multi-turn conversation history and real-time streaming.
+
+### 18.2 Features
+
+| Feature | Detail |
+|---------|--------|
+| **Multi-turn history** | Retains last 6 conversation turns (configurable via `_MAX_HISTORY_TURNS`) |
+| **Streaming (SSE)** | Tokens streamed via Server-Sent Events for real-time display |
+| **Live weather context** | Injects real-time weather (temperature, rainfall) into every prompt |
+| **Weather cache** | 5-minute TTL cache avoids re-fetching weather on every chat turn |
+| **Grounded persona** | System prompt enforces Indian agri advisor tone, 200-word limit, bullet points |
+
+### 18.3 Context Injected into Each Prompt
+
+```
+Context block sent to LLM per turn:
+  District: Pune
+  State: Maharashtra
+  Zone: Semi-arid
+  Season: Kharif
+  Soil: Loam pH 6.5
+  Weather: 38°C high, 24°C low, 12mm rain (LIVE from Open-Meteo)
+  Top Crops: Green Gram, Bajra, Okra
+```
+
+### 18.4 Streaming Protocol (SSE)
+
+| Event | Format | Meaning |
+|-------|--------|---------|
+| Token chunk | `data: <text>\n\n` | Incremental response token |
+| Done | `data: [DONE]<history_json>\n\n` | Stream complete; updated history returned |
+| Error | `data: [ERROR] <message>\n\n` | LLM failure |
+
+### 18.5 Provider Configuration
+
+| Setting | Value |
+|---------|-------|
+| Primary | Ollama (`llama3.2`) — local, private, free |
+| Fallback | Gemini (`gemini-2.5-flash-lite`) |
+| Gemini thinking | Disabled (`thinking_budget: 0`) for low latency |
+| Config | `LLM_PROVIDER=ollama` in `.env` |
+
+---
+
+## 19. System Limitations & Future Scope
+
+### 19.1 Current Limitations
 
 | Limitation | Description |
 |-----------|-------------|
 | **Weather API Dependency** | Requires internet access to Open-Meteo for live data |
 | **Crop Coverage** | Currently covers 50+ short-duration crops (15–90 days) only; long-duration staples (sugarcane, cotton) not included |
-| **Language** | Interface is in English only; no regional language support |
+| **Language** | Interface is in English only; regional language support limited to LLM explanations (Hindi/Marathi) |
 | **Market Prices** | No real-time commodity price data integrated |
 | **Soil Testing** | Relies on user-input or region defaults; no IoT soil sensor integration |
 | **Irrigation Scheduling** | Provides water need estimates only, not daily irrigation schedules |
 | **Mobile App** | Web-only; no native iOS/Android app |
+| **LLM Dependency** | AI Chat and LLM features require Ollama running locally or a Gemini API key |
 
-### 18.2 Future Scope
+### 19.2 Future Scope
 
 | Feature | Description |
 |---------|-------------|
-| **Satellite Imagery** | Integrate NDVI (Normalized Difference Vegetation Index) for real soil moisture |
 | **Market Integration** | Live mandi (agricultural market) prices via Agmarknet / data.gov.in API |
 | **Long-duration Crops** | Add Wheat, Rice, Cotton, Sugarcane with multi-season planning |
 | **Farmer Profile** | Persistent user accounts to track recommendations over seasons |
-| **Yield Prediction** | Add ML model to predict expected yield per crop |
 | **Climate Change Scenarios** | Incorporate IPCC climate projections for 5/10-year planning |
 | **Government Scheme Alerts** | Alert farmers about relevant PM-KISAN, PMFBY insurance schemes |
+| **Voice Interface** | Regional-language voice input for farmers without literacy barriers |
 
 ---
 
-*End of User Module Paper — Indian Farmer Crop Recommendation System v2.8*  
-*Prepared by HPC Group, CDAC-Pune | May 2026*
+*End of User Module Paper — Indian Farmer Crop Recommendation System v2.9*  
+*Prepared by HPC Group, CDAC-Pune | June 2026*
