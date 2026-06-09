@@ -40,7 +40,7 @@ _STATE_TO_ZONE: Dict[str, str] = {
     "KA": "South", "TN": "South", "AP": "South", "TS": "South", "KL": "South",
     "TL": "South",    # Telangana (regions.json uses TL, not TS)
     "PY": "South",    # Puducherry UT (coastal Tamil Nadu climate)
-    "AN": "South",    # Andaman & Nicobar Islands (tropical island, South humidity)
+    "AN": "Andaman",  # Andaman & Nicobar Islands — dedicated island zone (not mainland South)
     # East
     "WB": "East",  "BR": "East",  "OD": "East",  "JH": "East",
     # West (coastal Maharashtra + Gujarat)
@@ -70,6 +70,26 @@ _HIGHLAND_CLIMATE: Dict[int, Dict[str, float]] = {
     10: {"temperature":  5.5, "rainfall":  7.5, "humidity": 32.0},
     11: {"temperature": -2.5, "rainfall":  7.5, "humidity": 40.0},
     12: {"temperature": -6.5, "rainfall":  9.0, "humidity": 45.0},
+}
+
+# ── Inline Andaman & Nicobar Islands climate table (Port Blair, ~16 m) ──────
+# Source: AN_PORT_BLAIR district parquet data (2014-2024 averages).
+# temp_avg = (temp_max + temp_min) / 2 per day, averaged over all years.
+# rainfall = monthly total averaged over years (mm/month).
+# humidity = daily average over all years (%).
+_ANDAMAN_CLIMATE: Dict[int, Dict[str, float]] = {
+    1:  {"temperature": 26.4, "rainfall":  51.5, "humidity": 86.0},
+    2:  {"temperature": 26.7, "rainfall":  23.8, "humidity": 88.0},
+    3:  {"temperature": 27.6, "rainfall":  22.5, "humidity": 91.5},
+    4:  {"temperature": 28.7, "rainfall":  75.1, "humidity": 90.8},
+    5:  {"temperature": 28.3, "rainfall": 288.8, "humidity": 91.7},
+    6:  {"temperature": 27.5, "rainfall": 306.3, "humidity": 92.3},
+    7:  {"temperature": 27.3, "rainfall": 279.4, "humidity": 92.2},
+    8:  {"temperature": 27.2, "rainfall": 277.8, "humidity": 92.2},
+    9:  {"temperature": 26.8, "rainfall": 361.3, "humidity": 93.4},
+    10: {"temperature": 26.7, "rainfall": 314.2, "humidity": 94.0},
+    11: {"temperature": 27.0, "rainfall": 184.0, "humidity": 91.1},
+    12: {"temperature": 26.8, "rainfall": 149.4, "humidity": 87.8},
 }
 
 # ── District-level overrides for Maharashtra sub-zones ───────────────────────
@@ -130,6 +150,12 @@ _ZONE_DIURNAL_RANGE: Dict[str, Dict[int, float]] = {
     "Highland": {
         1: 14.0, 2: 14.0, 3: 15.0, 4: 16.0, 5: 17.0, 6: 14.0,
         7: 10.0, 8: 10.0, 9: 12.0, 10: 14.0, 11: 14.0, 12: 14.0,
+    },
+    # Andaman islands: near-constant sea-moderated diurnal range ~3°C year-round
+    # (actual avg: max-min ≈ 3.1°C Jul, 3.3°C Aug from 2014-2024 parquet data)
+    "Andaman": {
+        1:  3.8, 2:  5.0, 3:  6.3, 4:  5.4, 5:  3.8, 6:  3.0,
+        7:  3.1, 8:  3.0, 9:  3.1, 10:  3.5, 11:  3.4, 12:  3.3,
     },
 }
 
@@ -236,8 +262,6 @@ def get_monthly_climate(
     """
     data = _load_csv(csv_path)
     fallback = {"temperature": 28.0, "temp_max": 35.0, "temp_min": 21.0, "rainfall": 80.0, "humidity": 60.0}
-    if not data:
-        return fallback
 
     def _with_range(result: dict, z: str, m: int) -> dict:
         """Enrich a climate dict with temp_max and temp_min from the diurnal range table."""
@@ -253,6 +277,19 @@ def get_monthly_climate(
     if zone == "Highland":
         base = dict(_HIGHLAND_CLIMATE.get(month, _HIGHLAND_CLIMATE[6]))
         return _with_range(base, "Highland", month)
+
+    # ── Andaman & Nicobar Islands — served from inline island climate table ──
+    # The broad "South" zone CSV reflects mainland India (much higher temps in
+    # summer, wider diurnal range).  Port Blair is a stable tropical island with
+    # a ~3°C diurnal swing year-round; using mainland data overstates Jul/Aug
+    # temp_max and understates temp_min significantly.
+    if zone == "Andaman":
+        base = dict(_ANDAMAN_CLIMATE.get(month, _ANDAMAN_CLIMATE[6]))
+        return _with_range(base, "Andaman", month)
+
+    # All other zones require the CSV
+    if not data:
+        return fallback
 
     # ── Sub-zone derivation for Marathwada / Vidarbha ────────────────────────
     # These sub-zones are NOT in the historical CSV (which only has broad zones).
