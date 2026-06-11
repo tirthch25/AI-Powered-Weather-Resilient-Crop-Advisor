@@ -43,13 +43,23 @@ except ImportError:
     stream_farmer_answer = None
     set_weather_cache = None
 
+# Agents (LLaMA + Ollama web search — global data gathering)
+try:
+    from src.agents.location_agent import get_countries, get_states, get_districts, resolve_coordinates
+    from src.agents.data_gathering_agent import gather_location_data
+    from src.agents.crop_agent import recommend_crops_agent
+    _AGENTS_AVAILABLE = True
+except ImportError:
+    _AGENTS_AVAILABLE = False
+    get_countries = get_states = get_districts = resolve_coordinates = None
+    gather_location_data = recommend_crops_agent = None
+
 app = FastAPI(
-    title="Indian Farmer Crop Recommendation API v2.6",
-    description="ML-powered crop recommendation with LSTM + XGBoost weather, Random Forest suitability, "
-                "risk assessment, pest warnings, planting calendar, LLaMA/Ollama LLM regional filtering + "
-                "AI explanations, and farmer chat for Indian farmers. "
-                "Covers 640 districts across 28 states and 8 union territories.",
-    version="2.6"
+    title="AI-Powered Weather Resilient Crop Advisor v3.0",
+    description="Global crop advisor powered by LLaMA + Ollama web search agents. "
+                "Supports 50+ countries, 250+ states, 170+ districts. "
+                "Agent gathers real-time weather, soil, forecast & market data.",
+    version="3.0"
 )
 
 
@@ -914,3 +924,273 @@ def farmer_chat_stream(request: StreamChatRequest):
     )
     return StreamingResponse(gen, media_type="text/event-stream")
 
+
+# ===============================================================================
+# Global Agent Endpoints -- LLaMA + Ollama Web Search
+# ===============================================================================
+
+@app.get("/api/countries")
+def api_get_countries():
+    """Return all supported countries for the global location selector."""
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Location agent not available")
+    return {"countries": get_countries()}
+
+
+@app.get("/api/states/{country_code}")
+def api_get_states(country_code: str):
+    """Return states/provinces for a given country code."""
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Location agent not available")
+    states = get_states(country_code.upper())
+    return {"states": states}
+
+
+@app.get("/api/districts/{country_code}/{state_code}")
+def api_get_districts(country_code: str, state_code: str):
+    """Return districts for a given country and state code."""
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Location agent not available")
+    districts = get_districts(country_code.upper(), state_code.upper())
+    return {"districts": districts}
+
+
+class AnalyzeRequest(BaseModel):
+    country_code: str  = Field(..., description="ISO country code e.g. IN, US, BR")
+    country_name: str  = Field(..., description="Country name e.g. India")
+    state_code:   str  = Field(..., description="State code e.g. MH")
+    state_name:   str  = Field(..., description="State name e.g. Maharashtra")
+    district:     str  = Field(..., description="District name e.g. Nashik")
+    lat:          Optional[float] = Field(None, description="Latitude (auto-resolved if not given)")
+    lon:          Optional[float] = Field(None, description="Longitude (auto-resolved if not given)")
+    irrigation:   str  = Field("Limited", description="None / Limited / Full")
+    planning_days:int  = Field(90, ge=15, le=365)
+    soil_texture: Optional[str]  = Field(None)
+    soil_ph:      Optional[float]= Field(None)
+    soil_organic: Optional[str]  = Field(None)
+    soil_drainage:Optional[str]  = Field(None)
+
+
+@app.post("/api/analyze")
+def api_analyze(request: AnalyzeRequest):
+    """
+    Main global analysis endpoint.
+
+    1. Resolves coordinates for the district
+    2. Runs LLaMA agent with Ollama web search to gather real data
+    3. Runs crop recommendation agent
+    4. Returns dashboard data: current weather, 6-month forecast, crops, market prices
+    """
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Agent system not available. Check OLLAMA_API_KEY in .env.")
+
+    try:
+        # Resolve coordinates
+        lat = request.lat
+        lon = request.lon
+        if lat is None or lon is None:
+            lat, lon = resolve_coordinates(request.country_code, request.state_code, request.district)
+
+        # Step 1: Data gathering agent — real weather + climatology + LLM enrichment
+        gathered = gather_location_data(
+            country=request.country_name,
+            state=request.state_name,
+            district=request.district,
+            lat=lat,
+            lon=lon,
+            state_code=request.state_code,  # passed for India zone mapping
+        )
+
+        # Step 2: Soil override if user provided
+        soil_override = None
+        if request.soil_texture:
+            soil_override = {
+                "type":          request.soil_texture,
+                "ph":            request.soil_ph or 7.0,
+                "organic_matter":request.soil_organic or "Medium",
+                "drainage":      request.soil_drainage or "Medium",
+            }
+
+        # Step 3: Crop recommendation agent
+        crops = recommend_crops_agent(
+            country=request.country_name,
+            state=request.state_name,
+            district=request.district,
+            gathered_data=gathered,
+            irrigation=request.irrigation,
+            planning_days=request.planning_days,
+            soil_override=soil_override,
+        )
+
+        # Step 4: Update LLM chat weather cache so chatbot knows live conditions
+        if set_weather_cache and _LLM_CHAT_AVAILABLE and gathered.get("current"):
+            cur = gathered["current"]
+            summary = (
+                f"Current conditions in {request.district}, {request.state_name}: "
+                f"{cur.get('temperature_c','?')} C, "
+                f"humidity {cur.get('humidity_pct','?')}%, "
+                f"rainfall last 7 days: {cur.get('rainfall_7d_mm','?')} mm"
+            )
+            cache_key = f"{request.country_code}_{request.state_code}_{request.district}".upper()
+            set_weather_cache(cache_key, summary)
+
+        return {
+            "location": {
+                "country_code": request.country_code,
+                "country_name": request.country_name,
+                "state_code":   request.state_code,
+                "state_name":   request.state_name,
+                "district":     request.district,
+                "lat": lat,
+                "lon": lon,
+            },
+            "gathered_data": gathered,
+            "recommended_crops": crops,
+            "agent": "llama3.2 + ollama_web_search",
+            "version": "3.0",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[/api/analyze error]\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+# -- SSE Streaming Analyze Endpoint -------------------------------------------
+# Emits real-time progress. Weather + LLM enrichment run IN PARALLEL for speed.
+
+@app.post('/api/analyze/stream')
+def api_analyze_stream(request: AnalyzeRequest):
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail='Agent system not available.')
+    import json as _json
+    import concurrent.futures as _cf
+    import datetime as _dt
+
+    def _evt(step, pct, msg, data=None):
+        payload = {'step': step, 'pct': pct, 'msg': msg}
+        if data is not None:
+            payload['data'] = data
+        return 'data: ' + _json.dumps(payload) + '\n\n'
+
+    def generate():
+        try:
+            from src.agents.data_gathering_agent import (
+                _fetch_openmeteo_current, _build_forecast_6month,
+                _llm_enrich, _get_world_zone, _ZONE_CLIMATE,
+                _ZONE_SOIL_DEFAULTS, _default_market_prices, _guess_season,
+            )
+            current_month = _dt.datetime.now().month
+            loc_str = request.district + ', ' + request.state_name + ', ' + request.country_name
+
+            # Step 1: Resolve coordinates
+            yield _evt(1, 12, 'Resolving location: ' + request.district + ', ' + request.state_name + '...')
+            lat = request.lat
+            lon = request.lon
+            if lat is None or lon is None:
+                lat, lon = resolve_coordinates(request.country_code, request.state_code, request.district)
+            yield _evt(1, 22, 'Location resolved: ' + str(round(lat,3)) + 'N, ' + str(round(lon,3)) + 'E')
+
+            # Steps 2+4: Fire weather + LLM IN PARALLEL
+            yield _evt(2, 30, 'Fetching live weather & running AI analysis in parallel...')
+            executor = _cf.ThreadPoolExecutor(max_workers=2)
+            wx_future  = executor.submit(_fetch_openmeteo_current, lat, lon)
+            llm_future = executor.submit(_llm_enrich, loc_str, request.country_name, 25.0, current_month)
+
+            try:
+                live_wx = wx_future.result(timeout=10)
+            except Exception:
+                live_wx = None
+            executor.shutdown(wait=False)
+
+            if live_wx:
+                current = live_wx
+                yield _evt(2, 42, 'Live weather: ' + str(current['temperature_c']) + 'C  |  Humidity: ' + str(current['humidity_pct']) + '%  |  Rain 7d: ' + str(current['rainfall_7d_mm']) + ' mm')
+            else:
+                wz_t = _get_world_zone(request.country_name, lat)
+                zc = (_ZONE_CLIMATE.get(wz_t) or _ZONE_CLIMATE['Subtropical']).get(current_month, {})
+                ta = zc.get('temp', 25)
+                current = {'temperature_c': ta, 'temp_max_c': ta+6, 'temp_min_c': ta-6,
+                    'humidity_pct': zc.get('hum',65), 'soil_temp_c': round(ta-2,1),
+                    'rainfall_7d_mm': round(zc.get('rain',60)/4,1),
+                    'wind_kmh': 12.0, 'uv_index': 6.0, 'feels_like_c': round(ta+2,1)}
+                yield _evt(2, 42, 'Using zone-based weather estimate (API unavailable)')
+
+            # Step 3: Forecast - pure computation, instant
+            yield _evt(3, 55, 'Building 6-month seasonal forecast...')
+            forecast_6month = _build_forecast_6month(
+                country=request.country_name, state_code=request.state_code,
+                lat=lat, live_temp_avg=current['temperature_c'], current_month=current_month)
+            season = _guess_season(current_month, request.country_name)
+            yield _evt(3, 65, 'Forecast ready: ' + str(len(forecast_6month)) + ' months  |  Season: ' + season)
+
+            # Step 4: Collect LLM result (already running in background)
+            yield _evt(4, 70, 'Collecting AI soil and market analysis...')
+            try:
+                llm_data = llm_future.result(timeout=3)
+            except Exception:
+                llm_data = None
+
+            world_zone = _get_world_zone(request.country_name, lat)
+            if llm_data and llm_data.get('soil') and isinstance(llm_data['soil'].get('ph'), (int, float)):
+                soil = llm_data['soil']
+                soil.setdefault('type', _ZONE_SOIL_DEFAULTS.get(world_zone, {}).get('type', 'Loam'))
+                soil.setdefault('organic_matter', 'Medium')
+                soil.setdefault('drainage', 'Medium')
+            else:
+                soil = dict(_ZONE_SOIL_DEFAULTS.get(world_zone,
+                    {'type': 'Loam', 'ph': 7.0, 'organic_matter': 'Medium', 'drainage': 'Good'}))
+
+            if request.soil_texture:
+                soil = {'type': request.soil_texture, 'ph': request.soil_ph or soil.get('ph', 7.0),
+                    'organic_matter': request.soil_organic or 'Medium',
+                    'drainage': request.soil_drainage or 'Medium'}
+
+            market_prices = (
+                llm_data.get('market_prices')
+                if llm_data and len(llm_data.get('market_prices', {})) >= 2
+                else _default_market_prices(request.country_name, world_zone)
+            )
+            zlm = {'Tropical':'Tropical','Subtropical':'Subtropical','Arid':'Arid',
+                   'Mediterranean':'Mediterranean','Temperate':'Temperate','Continental':'Continental',
+                   'Temperate_Americas':'Temperate','Tropical_Americas':'Tropical',
+                   'Subtropical_S':'Subtropical','Arid_Oceania':'Semi-Arid'}
+            climate_zone = (llm_data.get('climate_zone') if llm_data and llm_data.get('climate_zone')
+                else zlm.get(world_zone, 'Subtropical'))
+            district_summary = (llm_data.get('district_summary') if llm_data and llm_data.get('district_summary')
+                else (request.district + ' is an agricultural district in ' + request.state_name +
+                      ', ' + request.country_name + '. ' + climate_zone + ' climate, ' +
+                      str(current['temperature_c']) + 'C current temperature.'))
+
+            gathered = {'current': current, 'forecast_6month': forecast_6month, 'soil': soil,
+                'season': season, 'climate_zone': climate_zone,
+                'market_prices': market_prices, 'district_summary': district_summary}
+            yield _evt(4, 82, 'Soil: ' + str(soil.get('type','?')) + ' pH ' + str(soil.get('ph','?')) + '  |  ' + str(len(market_prices)) + ' crop prices ready')
+
+            # Step 5: Crop recommendations
+            yield _evt(5, 88, 'Running crop suitability ranking for ' + request.district + '...')
+            crops = recommend_crops_agent(
+                country=request.country_name, state=request.state_name,
+                district=request.district, gathered_data=gathered,
+                irrigation=request.irrigation, planning_days=request.planning_days, soil_override=None)
+            yield _evt(5, 96, str(len(crops)) + ' crops ranked by suitability')
+
+            if set_weather_cache and _LLM_CHAT_AVAILABLE:
+                cur = gathered['current']
+                wx_sum = 'Temp ' + str(cur.get('temperature_c','?')) + 'C, humidity ' + str(cur.get('humidity_pct','?')) + '%, rain7d ' + str(cur.get('rainfall_7d_mm','?')) + 'mm'
+                ck = (request.country_code+'_'+request.state_code+'_'+request.district).upper()
+                set_weather_cache(ck, wx_sum)
+
+            result = {'location': {'country_code': request.country_code, 'country_name': request.country_name,
+                'state_code': request.state_code, 'state_name': request.state_name,
+                'district': request.district, 'lat': lat, 'lon': lon},
+                'gathered_data': gathered, 'recommended_crops': crops,
+                'agent': 'open-meteo+zone+llm(parallel)', 'version': '3.1'}
+            yield _evt('done', 100, 'Analysis complete!', result)
+
+        except Exception as exc:
+            import traceback as _tb
+            logger.error('[/api/analyze/stream error]\n' + _tb.format_exc())
+            yield 'data: ' + _json.dumps({'step': 'error', 'pct': 0, 'msg': str(exc)}) + '\n\n'
+
+    return StreamingResponse(generate(), media_type='text/event-stream')

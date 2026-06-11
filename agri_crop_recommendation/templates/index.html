@@ -4,267 +4,354 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Powered Weather Resilient Crop Advisor — Personalized Crop Recommendations for Indian Farmers</title>
-  <meta name="description"
-    content="AI-powered crop recommendation system for Indian farmers. Get personalized crop suggestions based on your region, soil, and weather using ML + Gemini LLM.">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌾</text></svg>">
-  <link rel="stylesheet" href="/static/css/style.css?v=2.7">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <title>AI Crop Advisor — Global Farm Intelligence Platform</title>
+  <meta name="description" content="AI-powered global crop advisor. Select any country, state, and district. LLaMA agent gathers real-time weather, soil, rainfall & market data to give you the best crop recommendations.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- chart.js removed: forecast now shown as a table -->
+  <link rel="stylesheet" href="/static/css/style.css?v=3.1">
 </head>
 
 <body>
+
   <!-- ── Header ── -->
   <header class="header" id="header">
     <div class="header-content">
       <div class="header-left">
-        <div class="logo">🌾</div>
+        <div class="logo-wrap">
+          <span class="logo-icon">🌾</span>
+          <div class="logo-pulse"></div>
+        </div>
         <div>
-          <h1>AI Powered Weather Resilient Crop Advisor</h1>
-          <p class="header-subtitle">AI-Powered Agricultural Advisory · 640 Districts · Gemini 2.5 Flash-Lite v2.7</p>
+          <h1 class="header-title">AI Crop Advisor</h1>
+          <p class="header-subtitle">Global Farm Intelligence · LLaMA Agent · Real-Time Data</p>
         </div>
       </div>
-
+      <div class="header-right">
+        <div class="agent-status" id="agentStatus">
+          <span class="status-dot online"></span>
+          <span>LLaMA Agent Ready</span>
+        </div>
+        <div class="version-badge">v3.0</div>
+      </div>
     </div>
   </header>
 
   <!-- ── Main ── -->
   <main class="main-container">
 
-    <!-- Input Form -->
-    <section class="card form-card" id="input-section">
+    <!-- ── SECTION 1: Location Input ── -->
+    <section class="card location-card" id="location-section">
       <div class="card-header">
         <div>
-          <h2>📝 Enter Your Farm Details</h2>
-          <p class="card-subtitle">Select your region, soil, and irrigation to get personalized AI recommendations</p>
+          <h2>🌍 Select Your Farm Location</h2>
+          <p class="card-subtitle">Choose your country, state, and district — our AI agent will gather all the data</p>
+        </div>
+        <div class="agent-badge">
+          <span class="agent-icon">🤖</span>
+          <span>LLaMA + Web Search Agent</span>
         </div>
       </div>
 
-      <form id="recommendationForm">
+      <form id="analyzeForm" autocomplete="off">
+        <!-- Row 1: Location dropdowns -->
+        <div class="location-grid">
+          <div class="form-group">
+            <label for="country">🌍 Country</label>
+            <div class="select-wrapper">
+              <select id="country" required>
+                <option value="">Loading countries...</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="state">🗺️ State / Province</label>
+            <div class="select-wrapper">
+              <select id="state" required disabled>
+                <option value="">Select country first...</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="district">📍 District / Region</label>
+            <div class="select-wrapper">
+              <select id="district" required disabled>
+                <option value="">Select state first...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Farm Details -->
+        <div class="section-divider">🌱 Farm Details (Optional)</div>
         <div class="form-grid">
-          <div class="form-group">
-            <label for="state">🗺️ State</label>
-            <select id="state" required>
-              <option value="">Loading states...</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="region">📍 District</label>
-            <select id="region" required disabled>
-              <option value="">Select a state first...</option>
-            </select>
-          </div>
           <div class="form-group">
             <label for="irrigation">💧 Irrigation</label>
-            <select id="irrigation" required>
-              <option value="None">None (Rainfed)</option>
-              <option value="Limited" selected>Limited</option>
-              <option value="Full">Full Irrigation</option>
-            </select>
+            <div class="select-wrapper">
+              <select id="irrigation">
+                <option value="None">None (Rainfed)</option>
+                <option value="Limited" selected>Limited</option>
+                <option value="Full">Full Irrigation</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
-            <label for="planning_days">⏱️ Planning Period (days)</label>
-            <input type="number" id="planning_days" value="90" min="15" max="365" required>
+            <label for="planning_days">📅 Planning Period (days)</label>
+            <input type="number" id="planning_days" value="90" min="15" max="365">
+          </div>
+          <div class="form-group">
+            <label for="soil_texture">🪨 Soil Type</label>
+            <div class="select-wrapper">
+              <select id="soil_texture">
+                <option value="">Auto-detect by Agent</option>
+                <option value="Clay">Clay</option>
+                <option value="Loam">Loam</option>
+                <option value="Sandy">Sandy</option>
+                <option value="Clay-Loam">Clay-Loam</option>
+                <option value="Sandy-Loam">Sandy-Loam</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="soil_ph">⚗️ Soil pH</label>
+            <input type="number" id="soil_ph" step="0.1" min="4" max="9" placeholder="Auto-detect">
           </div>
         </div>
 
-        <div class="section-divider">🌱 Soil Information (Optional)</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="soil_texture">Soil Type</label>
-            <select id="soil_texture">
-              <option value="">Use Region Default</option>
-              <option value="Clay">Clay</option>
-              <option value="Loam">Loam</option>
-              <option value="Sandy">Sandy</option>
-              <option value="Clay-Loam">Clay-Loam</option>
-              <option value="Sandy-Loam">Sandy-Loam</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="soil_ph">Soil pH</label>
-            <input type="number" id="soil_ph" step="0.1" min="4" max="9" placeholder="6.0 – 8.0">
-          </div>
-          <div class="form-group">
-            <label for="soil_organic">Organic Matter</label>
-            <select id="soil_organic">
-              <option value="Low">Low</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="High">High</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="soil_drainage">Drainage</label>
-            <select id="soil_drainage">
-              <option value="Poor">Poor</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="Good">Good</option>
-            </select>
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary" id="submitBtn">
-          🔍 Get AI Crop Recommendations
+        <button type="submit" class="btn-analyze" id="analyzeBtn">
+          <span class="btn-icon">🤖</span>
+          <span class="btn-text">Analyze with AI Agent</span>
+          <span class="btn-arrow">→</span>
         </button>
       </form>
     </section>
 
-    <!-- Loading -->
-    <div id="loading" class="loading hidden">
-      <div class="loading-content">
-        <div class="spinner"></div>
-        <p>Analyzing weather, soil &amp; ML models…</p>
-        <p class="loading-sub">Running LSTM + XGBoost ensemble · Gemini LLM filtering</p>
+    <!-- ── SECTION 2: Agent Progress ── -->
+    <div id="agentProgress" class="agent-progress hidden">
+      <div class="progress-header">
+        <span class="progress-title">🤖 AI Agent Working...</span>
+        <span class="progress-location" id="progressLocation"></span>
       </div>
+      <div class="progress-steps">
+        <div class="step" id="step1">
+          <div class="step-icon">📍</div>
+          <div class="step-label">Location</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step" id="step2">
+          <div class="step-icon">🌡️</div>
+          <div class="step-label">Live Weather</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step" id="step3">
+          <div class="step-icon">📅</div>
+          <div class="step-label">Forecast</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step" id="step4">
+          <div class="step-icon">🤖</div>
+          <div class="step-label">AI Analysis</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step" id="step5">
+          <div class="step-icon">🌾</div>
+          <div class="step-label">Crop Ranking</div>
+        </div>
+      </div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="progressBar"></div>
+      </div>
+      <p class="progress-message" id="progressMessage">Connecting to analysis agent…</p>
     </div>
 
-    <!-- Results -->
-    <div id="results" class="results hidden">
+    <!-- ── SECTION 3: Dashboard ── -->
+    <div id="dashboard" class="hidden">
 
-      <!-- AI Powered Banner -->
-      <div id="ai-banner" class="ai-banner hidden">
-        <span class="ai-banner-icon">✨</span>
-        <span id="ai-banner-text">Top 3 crops powered by Gemini LLM — regional filtering + AI explanations active.</span>
-        <span class="badge badge-ai" style="margin-left:auto">🤖 AI Enhanced</span>
+      <!-- Location Banner -->
+      <div class="location-banner" id="locationBanner">
+        <div class="location-info">
+          <span class="location-flag" id="locationFlag">🌍</span>
+          <div>
+            <div class="location-name" id="locationName">-</div>
+            <div class="location-meta" id="locationMeta">-</div>
+          </div>
+        </div>
+        <div class="location-stats">
+          <div class="loc-stat">
+            <span class="loc-stat-icon">🌤️</span>
+            <span id="locSeason">-</span>
+          </div>
+          <div class="loc-stat">
+            <span class="loc-stat-icon">🌡️</span>
+            <span id="locClimate">-</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Overview Stats -->
-      <section class="overview-grid" id="overview">
-        <div class="stat-card">
-          <div class="stat-icon">📍</div>
-          <div class="stat-label">Region</div>
-          <div class="stat-value" id="result-region">-</div>
+      <!-- Current Conditions — 6 Metric Cards -->
+      <section class="metrics-grid" id="metricsGrid">
+        <div class="metric-card" id="mc-temp">
+          <div class="metric-icon">🌡️</div>
+          <div class="metric-value"><span class="count-up" id="val-temp">--</span><span class="metric-unit">°C</span></div>
+          <div class="metric-label">Temperature</div>
+          <div class="metric-sub" id="sub-temp">Current</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🌾</div>
-          <div class="stat-label">Season</div>
-          <div class="stat-value" id="result-season">-</div>
+        <div class="metric-card" id="mc-humidity">
+          <div class="metric-icon">💧</div>
+          <div class="metric-value"><span class="count-up" id="val-humidity">--</span><span class="metric-unit">%</span></div>
+          <div class="metric-label">Humidity</div>
+          <div class="metric-sub" id="sub-humidity">Relative</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🌡️</div>
-          <div class="stat-label">Avg Temp</div>
-          <div class="stat-value" id="result-temp">-</div>
+        <div class="metric-card" id="mc-rain">
+          <div class="metric-icon">🌧️</div>
+          <div class="metric-value"><span class="count-up" id="val-rain">--</span><span class="metric-unit">mm</span></div>
+          <div class="metric-label">Rainfall</div>
+          <div class="metric-sub">Last 7 days</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🌧️</div>
-          <div class="stat-label">Expected Rain</div>
-          <div class="stat-value" id="result-rain">-</div>
+        <div class="metric-card" id="mc-soil">
+          <div class="metric-icon">🌱</div>
+          <div class="metric-value"><span class="count-up" id="val-soil">--</span><span class="metric-unit">°C</span></div>
+          <div class="metric-label">Soil Temp</div>
+          <div class="metric-sub" id="sub-soil">Surface</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🌱</div>
-          <div class="stat-label">Soil Type</div>
-          <div class="stat-value" id="result-soil">-</div>
+        <div class="metric-card" id="mc-wind">
+          <div class="metric-icon">🌬️</div>
+          <div class="metric-value"><span class="count-up" id="val-wind">--</span><span class="metric-unit">km/h</span></div>
+          <div class="metric-label">Wind Speed</div>
+          <div class="metric-sub">Surface</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🤖</div>
-          <div class="stat-label">Forecast Source</div>
-          <div class="stat-value" id="result-forecast-src">-</div>
+        <div class="metric-card" id="mc-uv">
+          <div class="metric-icon">☀️</div>
+          <div class="metric-value"><span class="count-up" id="val-uv">--</span><span class="metric-unit">/11</span></div>
+          <div class="metric-label">UV Index</div>
+          <div class="metric-sub" id="sub-uv">Current</div>
         </div>
       </section>
 
-      <!-- Season Guidance -->
-      <section class="card guidance-card" id="guidance-section">
-        <h3>ℹ️ Season Guidance</h3>
-        <p id="season-guidance">-</p>
-      </section>
-
-      <!-- Weather Forecast Chart -->
-      <section class="card" id="forecast-section">
+      <!-- Soil Info Card -->
+      <section class="card soil-card">
         <div class="card-header">
-          <h2>📊 Weather Forecast</h2>
-          <span class="badge badge-info" id="forecast-badge">ML Ensemble</span>
+          <h2>🪨 Soil Profile</h2>
+          <span class="badge badge-agent">AI Detected</span>
         </div>
-        <div class="chart-container">
-          <canvas id="weatherChart"></canvas>
+        <div class="soil-grid" id="soilGrid">
+          <div class="soil-stat"><span class="soil-icon">🏔️</span><div class="soil-val" id="soil-type">-</div><div class="soil-lbl">Type</div></div>
+          <div class="soil-stat"><span class="soil-icon">⚗️</span><div class="soil-val" id="soil-ph">-</div><div class="soil-lbl">pH Level</div></div>
+          <div class="soil-stat"><span class="soil-icon">🌿</span><div class="soil-val" id="soil-organic">-</div><div class="soil-lbl">Organic Matter</div></div>
+          <div class="soil-stat"><span class="soil-icon">💦</span><div class="soil-val" id="soil-drainage">-</div><div class="soil-lbl">Drainage</div></div>
+        </div>
+        <p class="district-summary" id="districtSummary"></p>
+      </section>
+
+      <!-- 6-Month Forecast Table -->
+      <section class="card forecast-table-card" id="forecast-section">
+        <div class="card-header">
+          <h2>📅 6-Month Agricultural Forecast</h2>
+          <span class="badge badge-agent">🤖 Agent Gathered</span>
+        </div>
+        <div class="forecast-table-wrap">
+          <table class="forecast-table" id="forecastTable">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>🌡️ Min °C</th>
+                <th>🌡️ Max °C</th>
+                <th>🌡️ Avg °C</th>
+                <th>💧 Humidity %</th>
+                <th>🌧️ Rainfall mm</th>
+              </tr>
+            </thead>
+            <tbody id="forecastTableBody">
+              <!-- filled by JS -->
+            </tbody>
+          </table>
         </div>
       </section>
 
+      <!-- Market Prices -->
+      <section class="card market-card" id="market-section">
+        <div class="card-header">
+          <h2>🛒 Nearby Market Prices</h2>
+          <span class="badge badge-agent">🤖 Agent Sourced</span>
+        </div>
+        <div class="market-grid" id="marketGrid">
+          <!-- Inserted by JS -->
+        </div>
+      </section>
 
-      <!-- Top Recommended Crops -->
+      <!-- Top Crop Recommendations -->
       <section id="crops-section">
         <div class="section-header">
-          <h2>🏆 Top Recommended Crops</h2>
-          <p class="section-subtitle" id="crops-count">-</p>
+          <h2>🏆 AI Crop Recommendations</h2>
+          <p class="section-subtitle" id="crops-subtitle">Ranked by suitability for your district's conditions</p>
+        </div>
+        <!-- Category filter tabs -->
+        <div class="crop-category-tabs" id="cropCategoryTabs">
+          <button class="cat-tab active" data-cat="all" onclick="filterCrops('all', this)">🌾 All</button>
+          <button class="cat-tab" data-cat="fruits"      onclick="filterCrops('fruits', this)">🍎 Fruits</button>
+          <button class="cat-tab" data-cat="vegetables"  onclick="filterCrops('vegetables', this)">🥦 Vegetables</button>
+          <button class="cat-tab" data-cat="grains"      onclick="filterCrops('grains', this)">🌾 Grains & Cereals</button>
+          <button class="cat-tab" data-cat="pulses"      onclick="filterCrops('pulses', this)">🫘 Pulses & Beans</button>
+          <button class="cat-tab" data-cat="cash"        onclick="filterCrops('cash', this)">💰 Cash Crops</button>
+          <button class="cat-tab" data-cat="spices"      onclick="filterCrops('spices', this)">🌶️ Spices & Herbs</button>
         </div>
         <div class="crops-grid" id="cropsGrid">
-          <!-- Crop cards inserted by JS -->
+          <!-- Inserted by JS -->
         </div>
       </section>
 
-      <!-- Risk Assessment -->
-      <section class="card" id="risk-section">
-        <div class="card-header">
-          <h2>⚠️ Risk Assessment</h2>
-        </div>
-        <div id="riskContent"><!-- inserted by JS --></div>
-      </section>
 
-      <!-- Pest / Disease Warnings -->
-      <section class="card" id="pest-section">
-        <div class="card-header">
-          <h2>🐛 Pest &amp; Disease Alerts</h2>
-        </div>
-        <div id="pestContent"><!-- inserted by JS --></div>
-      </section>
-
-      <!-- Planting Calendar -->
-      <section class="card" id="calendar-section">
-        <div class="card-header">
-          <h2>📅 Planting Calendar</h2>
-        </div>
-        <div id="calendarContent"><!-- inserted by JS --></div>
-      </section>
-
-      <!-- AI Farmer Chat -->
-      <section class="card chat-section" id="chat-section">
-        <div class="card-header">
-          <h2>💬 Ask the AI Farming Advisor</h2>
-          <div class="chat-header-actions">
-            <span class="chat-turn-badge" id="chatTurnBadge"></span>
-            <button class="chat-clear-btn" id="chatClearBtn" onclick="clearChat()" title="Clear conversation">🗑️ Clear</button>
-            <span class="badge badge-ai">🤖 Gemini</span>
-          </div>
-        </div>
-        <p class="card-subtitle" style="margin-bottom:0.75rem">
-          Ask follow-up questions about your crops, soil, pests, or farming practices. The AI remembers your conversation.
-        </p>
-        <!-- Live weather pill — populated by fetchLiveWeather() when a district is chosen -->
-        <div id="chatWeatherPill" style="display:none;margin-bottom:0.6rem;font-size:0.78rem;
-          background:rgba(86,163,43,0.12);border:1px solid rgba(86,163,43,0.3);border-radius:20px;
-          padding:4px 12px;color:#7ec850;font-weight:600;letter-spacing:0.01em"></div>
-
-        <!-- Suggestion Chips (shown after recommendation) -->
-        <div id="chatChips" class="chat-chips hidden"></div>
-
-        <div id="chatMessages" class="chat-messages">
-          <div class="chat-message ai">
-            <div class="chat-avatar">🌾</div>
-            <div class="chat-bubble">
-              Namaste! I'm your AI farming advisor powered by Gemini. I have access to <strong>live real-time weather data</strong> from Open-Meteo for any district you select — just ask <em>"What is today's temperature?"</em> and I'll give you the exact reading. After you get crop recommendations above, I'll suggest more questions!
-            </div>
-          </div>
-        </div>
-        <div class="chat-input-row">
-          <input type="text" id="chatInput" placeholder="Ask about crops, pests, soil, water, government schemes…" autocomplete="off">
-          <button class="chat-send-btn" id="chatSendBtn" onclick="sendChat()" title="Send">➤</button>
-        </div>
-        <p class="chat-notice">Powered by Gemini 2.5 Flash-Lite · Live temperature via Open-Meteo (free) · Streaming real-time responses · District &amp; season aware</p>
-      </section>
-
-    </div><!-- /results -->
+    </div><!-- /dashboard -->
   </main>
 
-  <!-- Footer -->
+  <!-- ── Footer ── -->
   <footer class="footer">
     <div class="footer-content">
-      <p><strong>🌾 AI Powered Weather Resilient Crop Advisor — v2.7</strong></p>
-      <p>ML-Powered: LSTM + XGBoost Weather · Random Forest Crop Suitability · Gemini LLM</p>
-      <p class="footer-stats">640 Regions · 28 States + 8 UTs · 50+ Crops · 10 Years Historical Data · 40,180 Records</p>
+      <p><strong>🌾 AI Crop Advisor v3.0</strong> — Global Farm Intelligence Platform</p>
+      <p>LLaMA 3.2 + Ollama Web Search · 50+ Countries · Real-Time Data · Gemini Fallback</p>
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=2.8"></script>
-</body>
+  <!-- ── Floating AI Chatbot ── -->
+  <div id="chatWidget" class="chat-widget">
+    <!-- Bubble trigger -->
+    <div class="chat-bubble" id="chatBubble" onclick="toggleChat()">
+      <span class="bubble-icon">🌾</span>
+      <span class="bubble-pulse"></span>
+      <div class="unread-badge" id="unreadBadge" style="display:none">1</div>
+    </div>
 
+    <!-- Chat panel -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-panel-header">
+        <div class="chat-panel-title">
+          <span>🤖 AI Farm Advisor</span>
+          <span class="chat-online-dot"></span>
+        </div>
+        <div class="chat-panel-actions">
+          <button class="chat-icon-btn" onclick="clearChat()" title="Clear">🗑️</button>
+          <button class="chat-icon-btn" onclick="toggleChat()" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="chat-location-pill" id="chatLocationPill" style="display:none"></div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg ai">
+          <div class="chat-avatar">🌾</div>
+          <div class="chat-bubble-msg">
+            Namaste! I'm your AI farming advisor. Select a location above and run the analysis — I'll then have full context about your district's weather, soil, and market prices to give you precise answers!
+          </div>
+        </div>
+      </div>
+      <div class="chat-chips" id="chatChips"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Ask about crops, pests, prices…" autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send" id="chatSendBtn" onclick="sendChat()">➤</button>
+      </div>
+      <p class="chat-footer-note">Powered by LLaMA 3.2 · Gemini fallback · Location-aware</p>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js?v=3.1"></script>
+</body>
 </html>
