@@ -4,7 +4,7 @@
 **Document Type:** User Module Paper  
 **Project:** AI Powered Weather Resilient Crop Advisor  
 **Version:** 3.0  
-**Prepared By:** HPC Group, CDAC-Pune  
+**Prepared By:** Tirth Chankeshwara, HPC Group, CDAC-Pune  
 **Date:** June 2026  
 **Platform:** Web Application (FastAPI + HTML/JS)  
 **Access URL:** `http://localhost:8000`
@@ -995,11 +995,11 @@ agri_crop_recommendation/
 
 **Location:** `src/services/llm_filter.py`
 
-### 16.1 Purpose
+### 18.1 Purpose
 
 Uses a local LLM (Ollama LLaMA 3.2, with Gemini fallback) to filter the candidate crop list down to only crops that are **climatically feasible** in the target district. This solves the regional coverage gap for the 552+ districts that lack explicit crop suitability data in the static database.
 
-### 16.2 How It Works
+### 18.2 How It Works
 
 ```
 Rule-based filtered crop list (input)
@@ -1013,7 +1013,7 @@ Safety net: if < 40% approved OR < 5 crops → fall back to unfiltered list
 Filtered crop list (output)
 ```
 
-### 16.3 Key Design Decisions
+### 18.3 Key Design Decisions
 
 | Decision | Reason |
 |----------|--------|
@@ -1023,11 +1023,11 @@ Filtered crop list (output)
 | **Forced JSON format** | Ollama's `format="json"` mode eliminates parse failures |
 | **State zone hints** | Each state has a compact agricultural zone description embedded in the prompt to improve LLM accuracy |
 
-### 16.4 State Zone Context (Prompt Enrichment)
+### 18.4 State Zone Context (Prompt Enrichment)
 
 The filter injects a one-line agricultural zone description per state (e.g., `"MH": "Maharashtra/Marathwada: black cotton soil, semi-arid, crops: jowar, tur, cotton, soybean, bajra"`) to give the LLM regional context without large token overhead. 20 major Indian states are covered.
 
-### 16.5 Provider Configuration
+### 18.5 Provider Configuration
 
 | Setting | Value |
 |---------|-------|
@@ -1042,11 +1042,11 @@ The filter injects a one-line agricultural zone description per state (e.g., `"M
 
 **Location:** `src/services/llm_explainer.py`
 
-### 17.1 Purpose
+### 19.1 Purpose
 
 Generates short, farmer-friendly **natural language explanations** for the top recommended crops. Each explanation tells the farmer *why* a crop suits their land and what to watch out for — in their regional language where applicable.
 
-### 17.2 Output Format
+### 19.2 Output Format
 
 Returns a JSON object attached to each crop as `llm_explanation`:
 
@@ -1059,7 +1059,7 @@ Returns a JSON object attached to each crop as `llm_explanation`:
 }
 ```
 
-### 17.3 Regional Language Support
+### 19.3 Regional Language Support
 
 | State Code | Language Added |
 |-----------|----------------|
@@ -1067,11 +1067,11 @@ Returns a JSON object attached to each crop as `llm_explanation`:
 | `UP`, `MP`, `RJ`, `HR`, `PB`, `UK`, `HP`, `BR`, `JH`, `CG`, `DL`, `GJ` | Hindi |
 | All others | English only |
 
-### 17.4 Bulk Generation
+### 19.4 Bulk Generation
 
 The `generate_bulk_explanations()` function generates explanations for the **top N crops only** (default: 3) to minimise LLM token usage and latency. Remaining crops receive no `llm_explanation` field.
 
-### 17.5 Provider Configuration
+### 19.5 Provider Configuration
 
 | Setting | Value |
 |---------|-------|
@@ -1086,13 +1086,13 @@ The `generate_bulk_explanations()` function generates explanations for the **top
 **Location:** `src/services/llm_chat.py`  
 **API Endpoint:** `POST /chat/stream`
 
-### 18.1 Purpose
+### 20.1 Purpose
 
 Powers an interactive, **context-aware AI farming Q&A chat** that answers free-form farmer questions grounded in the farmer's specific district, season, soil, live weather, and recommended crops. It uses **prompt-based context injection** — farm-specific data is assembled into a structured context block and prepended to every LLM prompt, ensuring answers are anchored to the farmer's actual situation. Supports multi-turn conversation history and real-time streaming via SSE.
 
 > **Note:** This module uses **prompt-based grounding** (context injection), not Retrieval-Augmented Generation (RAG) or model fine-tuning. The LLM (LLaMA 3.2 / Gemini) is used as-is; no vector database or embedding layer is involved. RAG-based grounding over the full crop knowledge base is planned for a future version.
 
-### 18.2 Features
+### 20.2 Features
 
 | Feature | Detail |
 |---------|--------|
@@ -1104,7 +1104,7 @@ Powers an interactive, **context-aware AI farming Q&A chat** that answers free-f
 | **Grounded persona** | System prompt enforces Indian agri advisor tone, 200-word limit, bullet points |
 | **Gemini key rotation** | Automatically rotates across up to 3 Gemini API keys on rate-limit errors |
 
-### 18.3 Context Injected into Each Prompt
+### 20.3 Context Injected into Each Prompt
 
 ```
 Context block sent to LLM per turn:
@@ -1117,7 +1117,7 @@ Context block sent to LLM per turn:
   Top Crops: Green Gram, Bajra, Okra
 ```
 
-### 18.4 Streaming Protocol (SSE)
+### 20.4 Streaming Protocol (SSE)
 
 | Event | Format | Meaning |
 |-------|--------|---------|
@@ -1125,7 +1125,7 @@ Context block sent to LLM per turn:
 | Done | `data: [DONE]<history_json>\n\n` | Stream complete; updated history returned |
 | Error | `data: [ERROR] <message>\n\n` | LLM failure |
 
-### 18.5 Provider Configuration
+### 20.5 Provider Configuration
 
 | Setting | Value |
 |---------|-------|
