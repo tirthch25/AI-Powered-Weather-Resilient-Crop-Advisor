@@ -9,7 +9,7 @@
 ![HTML5](https://img.shields.io/badge/HTML5-Vanilla_JS-E34F26?style=for-the-badge&logo=html5)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**A Global Farm Intelligence Dashboard powered by LLaMA and Web Search Agents — covering 50+ countries, 250+ states, and 170+ districts natively.**
+**An AI Powered Weather Resilient Crop Advisor v3.0 powered by LLaMA and Web Search Agents — covering 50+ countries, 250+ states, and 170+ districts natively.**
 
 [Overview](#-overview) • [Agent Architecture](#-agent-architecture) • [Features](#-features) • [Installation](#-installation) • [API Endpoints](#-api-endpoints)
 
@@ -29,7 +29,7 @@ The platform relies on **LLaMA 3.2 (via Ollama)** running entirely locally for f
 
 ## 💡 Project Idea
 
-Most crop advisory tools rely on generic, static lookup tables or expensive IoT sensors. This platform takes a radically different approach by acting as a **Global Farm Intelligence Dashboard**. It combines **publicly available free data sources** with **Machine Learning** and **LLM Agents** to replicate the advice a skilled agronomist would give, dynamically, anywhere in the world.
+Most crop advisory tools rely on generic, static lookup tables or expensive IoT sensors. This platform takes a radically different approach by acting as an **AI Powered Weather Resilient Crop Advisor v3.0**. It combines **publicly available free data sources** with **Machine Learning** and **LLM Agents** to replicate the advice a skilled agronomist would give, dynamically, anywhere in the world.
 
 ### Core Design Principles
 
