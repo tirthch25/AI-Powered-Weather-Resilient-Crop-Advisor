@@ -1,9 +1,9 @@
 # User Module Paper
-## AI Powered Weather Resilient Crop Advisor — v2.9
+## AI Powered Weather Resilient Crop Advisor — v3.0
 
 **Document Type:** User Module Paper  
 **Project:** AI Powered Weather Resilient Crop Advisor  
-**Version:** 2.9  
+**Version:** 3.0  
 **Prepared By:** HPC Group, CDAC-Pune  
 **Date:** June 2026  
 **Platform:** Web Application (FastAPI + HTML/JS)  
@@ -65,7 +65,7 @@ The **AI Powered Weather Resilient Crop Advisor** is an AI-powered agricultural 
 | **ML Models** | 3 (LSTM, XGBoost Weather ×3, Random Forest) |
 | **Live Weather Endpoint** | `GET /weather/now/{region_id}` — Open-Meteo per district |
 | **Temperature Fix Coverage** | 68.5% of all district-season combos benefited (v2.8) |
-| **API Version** | v2.9 |
+| **API Version** | v3.0 |
 
 ---
 
@@ -147,15 +147,15 @@ flowchart TD
 | **[3]** | **Season Detection** | `detect_season()` → Kharif (Jun–Sep) / Rabi (Oct–Feb) / Zaid (Mar–May) |
 | **[4]** | **Feature Engineering** | `add_agri_features()` → `temp_avg`, `gdd`, `dry_spell_days`, `rainfall_7d` |
 | **[5]** | **ML Weather Forecast** | LSTM + XGBoost ensemble → up to 90-day horizon; climatology fallback |
-| **[5b]** | **Satellite Data** *(v2.9)* | NASA POWER NDVI trend + Open-Meteo soil moisture (0–7 cm depth) |
+| **[5b]** | **Satellite Data** *(v3.0)* | NASA POWER NDVI trend + Open-Meteo soil moisture (0–7 cm depth) |
 | **[6]** | **Soil Resolution** | User-provided values OR `region.get_default_soil()` |
-| **[7]** | **LLM Regional Filter** *(v2.9)* | LLaMA 3.2 removes climatically impossible crops; safety net prevents over-filtering |
+| **[7]** | **LLM Regional Filter** *(v3.0)* | LLaMA 3.2 removes climatically impossible crops; safety net prevents over-filtering |
 | **[7b]** | **Crop Scoring** | `CropSuitabilityRF.predict_score()` (60%) + `calculate_suitability_score()` (40%) → Top 15 |
-| **[7c]** | **Yield Prediction** *(v2.9)* | XGBoost Yield Predictor → expected yield in q/ha per crop |
+| **[7c]** | **Yield Prediction** *(v3.0)* | XGBoost Yield Predictor → expected yield in q/ha per crop |
 | **[8]** | **Risk Assessment** | `RiskAssessmentEngine` → Drought (40%) + Temp Stress (35%) + Extreme Events (25%) |
 | **[9]** | **Pest & Disease Warnings** | `PestWarningSystem` → weather-triggered alerts per crop (Low → Critical severity) |
 | **[10]** | **Planting Calendar** | `PlantingCalendar` → 4 growth phases with care tips and sowing window dates |
-| **[11]** | **LLM Explainer** *(v2.9)* | `generate_bulk_explanations()` → farmer-friendly explanations for top 3 crops |
+| **[11]** | **LLM Explainer** *(v3.0)* | `generate_bulk_explanations()` → farmer-friendly explanations for top 3 crops |
 | **→** | **JSON Response** | Frontend renders full dashboard: yield badge + NDVI chart + risk badges + pest alerts |
 
 ---
@@ -176,12 +176,12 @@ Provides a single-page web application that allows farmers (or agricultural advi
 | **Overview Cards** | `#overview` | Summary stats (region, season, temp, rain, soil, forecast source) |
 | **Season Guidance** | `#guidance-section` | Contextual planting guidance |
 | **Weather Chart** | `#forecast-section` | 12-month weather chart (Chart.js) |
-| **Satellite Intelligence** | `#satellite-section` | NDVI trend chart + soil moisture stats *(v2.9)* |
-| **Recommended Crops** | `#crops-section` | Top **15** crop cards with suitability scores + **yield badges** *(v2.9)* |
+| **Satellite Intelligence** | `#satellite-section` | NDVI trend chart + soil moisture stats *(v3.0)* |
+| **Recommended Crops** | `#crops-section` | Top **15** crop cards with suitability scores + **yield badges** *(v3.0)* |
 | **Risk Assessment** | `#risk-section` | Risk breakdown per crop |
 | **Pest/Disease Alerts** | `#pest-section` | Active pest/disease warnings |
 | **Planting Calendar** | `#calendar-section` | Timeline milestones per crop |
-| **AI Farming Chat** | `#chat-section` | **LLaMA 3.2** (local) / Gemini fallback — context-injected streaming Q&A *(v2.9)* |
+| **AI Farming Chat** | `#chat-section` | **LLaMA 3.2** (local) / Gemini fallback — context-injected streaming Q&A *(v3.0)* |
 
 ### 3.3 Input Form Fields
 
@@ -999,7 +999,7 @@ agri_crop_recommendation/
 
 ---
 
-## 16. Module 14 — LLM Regional Crop Filter (New in v2.9)
+## 16. Module 14 — LLM Regional Crop Filter (New in v3.0)
 
 **Location:** `src/services/llm_filter.py`
 
@@ -1046,7 +1046,7 @@ The filter injects a one-line agricultural zone description per state (e.g., `"M
 
 ---
 
-## 17. Module 15 — LLM Crop Explainer (New in v2.9)
+## 17. Module 15 — LLM Crop Explainer (New in v3.0)
 
 **Location:** `src/services/llm_explainer.py`
 
@@ -1089,7 +1089,7 @@ The `generate_bulk_explanations()` function generates explanations for the **top
 
 ---
 
-## 18. Module 16 — LLM Farmer Chat (New in v2.9)
+## 18. Module 16 — LLM Farmer Chat (New in v3.0)
 
 **Location:** `src/services/llm_chat.py`  
 **API Endpoint:** `POST /chat/stream`
@@ -1173,5 +1173,5 @@ Context block sent to LLM per turn:
 
 ---
 
-*End of User Module Paper — Indian Farmer Crop Recommendation System v2.9*  
+*End of User Module Paper — Indian Farmer Crop Recommendation System v3.0*  
 *Prepared by HPC Group, CDAC-Pune | June 2026*

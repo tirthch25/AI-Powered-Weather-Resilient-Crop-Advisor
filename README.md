@@ -1,4 +1,4 @@
-# 🌾 AI Powered Weather Resilient Crop Advisor
+# 🌾 AI Powered Weather Resilient Crop Advisor v3.0
 
 <div align="center">
 

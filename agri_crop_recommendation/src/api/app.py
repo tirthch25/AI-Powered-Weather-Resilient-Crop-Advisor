@@ -65,7 +65,7 @@ app = FastAPI(
     description="Global crop advisor powered by LLaMA + Ollama web search agents. "
                 "Supports 50+ countries, 250+ states, 170+ districts. "
                 "Agent gathers real-time weather, soil, forecast & market data.",
-    version="3.1"
+    version="3.0"
 )
 
 
@@ -209,7 +209,7 @@ def health_check():
 
     return {
         "status": "healthy",
-        "version": "3.1",
+        "version": "3.0",
         "regions_loaded": len(region_manager.get_all_regions()),
         "ml_models": ml_status,
         "llm_available": llm_available,
@@ -1131,7 +1131,7 @@ def api_analyze_stream(request: AnalyzeRequest):
                 'state_code': request.state_code, 'state_name': request.state_name,
                 'district': request.district, 'lat': lat, 'lon': lon},
                 'gathered_data': gathered, 'recommended_crops': crops,
-                'agent': 'open-meteo+zone+llm(parallel)', 'version': '3.1'}
+                'agent': 'open-meteo+zone+llm(parallel)', 'version': '3.0'}
             yield _evt('done', 100, 'Analysis complete!', result)
 
         except Exception as exc:
