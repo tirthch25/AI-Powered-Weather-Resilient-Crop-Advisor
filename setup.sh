@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — One-click setup for Indian Farmer Crop Recommendation System
+# setup.sh — One-click setup for AI Powered Weather Resilient Crop Advisor
 # Usage: bash setup.sh        (interactive)
 #        bash setup.sh --auto (non-interactive, all defaults)
 #
@@ -9,7 +9,7 @@ set -e
 
 echo ""
 echo "================================================================"
-echo "  Indian Farmer Crop Recommendation System — Setup"
+echo "  AI-Powered Weather-Resilient Crop Advisor Setup"
 echo "  LLM: LLaMA 3.2 (local via Ollama) + Gemini fallback"
 echo "================================================================"
 echo ""

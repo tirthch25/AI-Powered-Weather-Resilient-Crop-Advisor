@@ -1,8 +1,8 @@
 # User Module Paper
-## Indian Farmer Crop Recommendation System — v2.9
+## AI Powered Weather Resilient Crop Advisor — v2.9
 
 **Document Type:** User Module Paper  
-**Project:** Indian Farmer Crop Recommendation System  
+**Project:** AI Powered Weather Resilient Crop Advisor  
 **Version:** 2.9  
 **Prepared By:** HPC Group, CDAC-Pune  
 **Date:** June 2026  
@@ -41,7 +41,7 @@
 
 ## 1. Project Overview
 
-The **Indian Farmer Crop Recommendation System** is an AI-powered agricultural advisory web application designed specifically for Indian farmers. It leverages machine learning models, live weather data, soil analysis, and region-specific agricultural knowledge to recommend the most suitable crops for a farmer's land.
+The **AI Powered Weather Resilient Crop Advisor** is an AI-powered agricultural advisory web application designed specifically for Indian farmers. It leverages machine learning models, live weather data, soil analysis, and region-specific agricultural knowledge to recommend the most suitable crops for a farmer's land.
 
 ### 1.1 Goals
 

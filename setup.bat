@@ -1,10 +1,10 @@
 @echo off
-title Indian Farmer Crop Recommendation System — Setup
+title AI Powered Weather Resilient Crop Advisor Setup
 color 0A
 
 echo.
 echo  ================================================================
-echo   Indian Farmer Crop Recommendation System — Setup
+echo   AI-Powered Weather-Resilient Crop Advisor Setup
 echo   LLM: LLaMA 3.2 (local via Ollama) + Gemini fallback
 echo  ================================================================
 echo.

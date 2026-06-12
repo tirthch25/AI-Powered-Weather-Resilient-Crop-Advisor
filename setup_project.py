@@ -1,5 +1,5 @@
 """
-setup_project.py — One-command project setup for Indian Farmer Crop Recommendation System.
+setup_project.py — One-command project setup for AI Powered Weather Resilient Crop Advisor.
 
 Usage:
     python setup_project.py            # Interactive (recommended)
@@ -165,7 +165,7 @@ def setup_env():
     else:
         with open(ENV_FILE, "w", encoding="utf-8") as f:
             f.write(
-                "# Indian Farmer Crop Recommendation System — environment config\n\n"
+                "# AI Powered Weather Resilient Crop Advisor environment config\n\n"
                 "# ── Primary LLM (Local, Free, Private) ──────────────────────\n"
                 "LLM_PROVIDER=ollama\n"
                 "OLLAMA_MODEL=llama3.2\n"
@@ -478,7 +478,7 @@ def print_banner():
     print()
     hr()
     print(f"{BOLD}{GREEN}")
-    print("   INDIAN FARMER CROP RECOMMENDATION SYSTEM")
+    print("   AI POWERED WEATHER RESILIENT CROP ADVISOR")
     print(f"   Automated Project Setup{RESET}")
     hr()
     print()

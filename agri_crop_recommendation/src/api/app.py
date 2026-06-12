@@ -1,12 +1,11 @@
 import os
 import logging
 import traceback
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
 from starlette.requests import Request
 from dotenv import load_dotenv
@@ -24,6 +23,13 @@ from src.utils.seasons import detect_season, is_season_transition, format_season
 from src.services.risk import RiskAssessmentEngine
 from src.services.pests import PestWarningSystem
 from src.services.calendar import PlantingCalendar
+from src.api.models import (
+    AnalyzeRequest,
+    ChatRequest,
+    RegionRequest,
+    RiskRequest,
+    StreamChatRequest,
+)
 
 # LLM Explainer (optional — graceful fallback if unavailable)
 try:
@@ -55,11 +61,11 @@ except ImportError:
     gather_location_data = recommend_crops_agent = None
 
 app = FastAPI(
-    title="AI-Powered Weather Resilient Crop Advisor v3.0",
+    title="AI-Powered Weather-Resilient Crop Advisor",
     description="Global crop advisor powered by LLaMA + Ollama web search agents. "
                 "Supports 50+ countries, 250+ states, 170+ districts. "
                 "Agent gathers real-time weather, soil, forecast & market data.",
-    version="3.0"
+    version="3.1"
 )
 
 
@@ -108,40 +114,6 @@ region_manager = RegionManager()
 risk_engine = RiskAssessmentEngine()
 pest_system = PestWarningSystem()
 planting_calendar = PlantingCalendar()
-
-
-# ----------- Request Schemas -----------
-
-class SoilRequest(BaseModel):
-    texture: str = Field(..., description="Soil texture: Clay, Loam, Sandy, Clay-Loam, Sandy-Loam")
-    ph: float = Field(..., ge=0, le=14, description="Soil pH (0-14)")
-    organic_matter: str = Field(..., description="Organic matter: Low, Medium, High")
-    drainage: Optional[str] = Field("Medium", description="Drainage: Poor, Medium, Good")
-
-
-class RegionRequest(BaseModel):
-    region_id: Optional[str] = Field(None, description="Region ID (e.g., PUNE, SOLAPUR)")
-    latitude: Optional[float] = Field(None, description="Latitude (if region_id not provided)")
-    longitude: Optional[float] = Field(None, description="Longitude (if region_id not provided)")
-    season: Optional[str] = Field(None, description="Season: Kharif, Rabi, Zaid (auto-detected if not provided)")
-    soil: Optional[SoilRequest] = Field(None, description="Soil information (uses region default if not provided)")
-    irrigation: str = Field("Limited", description="Irrigation: None, Limited, Full")
-    planning_days: int = Field(90, ge=15, le=365, description="Planning horizon in days (15-365)")
-
-
-class RiskRequest(BaseModel):
-    region_id: str = Field(..., description="Region ID")
-    crop_id: str = Field(..., description="Crop ID (e.g., BAJRA_01)")
-    season: Optional[str] = Field(None, description="Season (auto-detected if not provided)")
-    irrigation: str = Field("Limited", description="Irrigation: None, Limited, Full")
-
-
-class ChatRequest(BaseModel):
-    question: str = Field(..., description="Farmer's question in English")
-    region_id: Optional[str] = Field("", description="Region ID for context (e.g., MH_PUNE)")
-    season: Optional[str] = Field("", description="Current season for context")
-    history: Optional[List[dict]] = Field(default_factory=list, description="Conversation history for multi-turn support")
-    crop_context: Optional[str] = Field("", description="Top recommended crops from last recommendation")
 
 
 # ----------- Helper Functions -----------
@@ -237,7 +209,7 @@ def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.6",
+        "version": "3.1",
         "regions_loaded": len(region_manager.get_all_regions()),
         "ml_models": ml_status,
         "llm_available": llm_available,
@@ -827,16 +799,6 @@ def farmer_chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
-# ----------- LLM Streaming Chat Endpoint -----------
-
-class StreamChatRequest(BaseModel):
-    question: str = Field(..., description="Farmer's question in English")
-    region_id: Optional[str] = Field("", description="Region ID for context")
-    season: Optional[str] = Field("", description="Current season")
-    history: Optional[List[dict]] = Field(default_factory=list, description="Conversation history")
-    crop_context: Optional[str] = Field("", description="Top crops from last recommendation")
-
-
 @app.post("/chat/stream")
 def farmer_chat_stream(request: StreamChatRequest):
     """
@@ -953,22 +915,6 @@ def api_get_districts(country_code: str, state_code: str):
         raise HTTPException(status_code=503, detail="Location agent not available")
     districts = get_districts(country_code.upper(), state_code.upper())
     return {"districts": districts}
-
-
-class AnalyzeRequest(BaseModel):
-    country_code: str  = Field(..., description="ISO country code e.g. IN, US, BR")
-    country_name: str  = Field(..., description="Country name e.g. India")
-    state_code:   str  = Field(..., description="State code e.g. MH")
-    state_name:   str  = Field(..., description="State name e.g. Maharashtra")
-    district:     str  = Field(..., description="District name e.g. Nashik")
-    lat:          Optional[float] = Field(None, description="Latitude (auto-resolved if not given)")
-    lon:          Optional[float] = Field(None, description="Longitude (auto-resolved if not given)")
-    irrigation:   str  = Field("Limited", description="None / Limited / Full")
-    planning_days:int  = Field(90, ge=15, le=365)
-    soil_texture: Optional[str]  = Field(None)
-    soil_ph:      Optional[float]= Field(None)
-    soil_organic: Optional[str]  = Field(None)
-    soil_drainage:Optional[str]  = Field(None)
 
 
 @app.post("/api/analyze")

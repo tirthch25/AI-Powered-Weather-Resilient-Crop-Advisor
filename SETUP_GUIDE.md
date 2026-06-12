@@ -1,729 +1,361 @@
-# 🌾 Indian Farmer Crop Recommendation System — Setup Guide v2.9
+# AI Powered Weather Resilient Crop Advisor Setup Guide
 
-> **Who is this for?**  
-> This guide is for anyone who wants to **run this project locally** for the first time — students, developers, researchers, or curious farmers. No prior setup experience required.
+This guide takes the project from a fresh clone to a running local dashboard. It also explains the optional LLM setup, verification steps, common failure modes, and what each setup choice changes.
 
----
+## Setup Map
 
-## 📋 Table of Contents
-
-1. [System Requirements](#1-system-requirements)
-2. [Install Python](#2-install-python)
-3. [Clone the Repository](#3-clone-the-repository)
-4. [Create a Virtual Environment](#4-create-a-virtual-environment)
-5. [Install Dependencies](#5-install-dependencies)
-6. [Run the Application](#6-run-the-application)
-7. [(Optional) Fetch District Weather Data](#7-optional-fetch-district-weather-data)
-8. [(Optional) Train the Weather &amp; Suitability Models](#8-optional-train-the-weather--suitability-models)
-9. [Using the Web Interface](#9-using-the-web-interface)
-10. [Using the API](#10-using-the-api)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Project Folder Overview](#12-project-folder-overview)
-
----
-
-## 1. System Requirements
-
-Before you start, make sure your computer meets these requirements:
-
-| Component  | Minimum                        | Recommended                   |
-|------------|-------------------------------|-------------------------------|
-| **OS**     | Windows 10 / macOS 11 / Ubuntu 20.04 | Windows 11 / macOS 13 / Ubuntu 22.04 |
-| **Python** | 3.8+                          | 3.10 or 3.11                  |
-| **RAM**    | 4 GB                          | 8 GB (8 GB needed for LLaMA 3.2 + LSTM training) |
-| **Storage**| 2 GB free                     | 6 GB free (with full weather data + LLaMA model) |
-| **Internet**| Required (weather data)      | Stable broadband               |
-| **Browser**| Chrome / Firefox / Edge / Safari (latest) | Any modern browser |
-| **Ollama** | Optional (enables local LLM) | Recommended — [ollama.com](https://ollama.com/download) |
-
-> ✅ **No API keys needed for core features.** Weather data is fetched free from [Open-Meteo](https://open-meteo.com/).
-> 🦙 **LLM features use LLaMA 3.2 locally (free, private)** via [Ollama](https://ollama.com) — no cloud required.
-
----
-
-## 2. Install Python
-
-> Skip this step if Python 3.8 or newer is already installed. Check by running `python --version` in your terminal.
-
-### 🪟 Windows
-1. Go to [https://www.python.org/downloads/](https://www.python.org/downloads/)
-2. Download the latest **Python 3.x** installer
-3. Run the installer — ⚠️ **Check the box "Add Python to PATH"** before clicking Install
-4. Verify installation:
-   ```powershell
-   python --version
-   pip --version
-   ```
-
-### 🍎 macOS
-```bash
-# Using Homebrew (recommended)
-brew install python
-
-# Verify
-python3 --version
-pip3 --version
+```text
+Install Python
+  -> Clone or open repository
+  -> Create virtual environment
+  -> Install dependencies
+  -> Configure .env
+  -> Optional: install Ollama and pull llama3.2
+  -> Verify models and API
+  -> Start web app
 ```
 
-### 🐧 Linux (Ubuntu/Debian)
-```bash
-sudo apt update
-sudo apt install python3 python3-pip python3-venv -y
+## Requirements
 
-# Verify
-python3 --version
+| Component | Minimum | Recommended | Why It Matters |
+| --- | --- | --- | --- |
+| OS | Windows 10, macOS 11, Ubuntu 20.04 | Windows 11, macOS 13+, Ubuntu 22.04+ | Modern Python and package support |
+| Python | 3.8+ | 3.10 or 3.11 | FastAPI, ML, and Pydantic compatibility |
+| RAM | 4 GB | 8 GB+ | Local LLM and model workflows need memory |
+| Storage | 2 GB | 6 GB+ | Python packages, trained models, Ollama model |
+| Internet | Required for first setup | Stable broadband | Dependencies, weather API, optional model pulls |
+| Browser | Current Chrome, Edge, Firefox, or Safari | Current Chrome or Edge | Dashboard and streaming responses |
+| Ollama | Optional | Recommended | Local private LLM features |
+
+Core recommendations can run without API keys. Ollama enables local chat and enrichment. Gemini can be used as a fallback if you add an API key.
+
+## Option A: One-Command Setup
+
+Run this from the repository root.
+
+### Windows
+
+```powershell
+.\setup.bat
 ```
 
----
-
-## 3. Clone the Repository
-
-You need **Git** installed to clone. Check with `git --version`.  
-If not installed → [https://git-scm.com/downloads](https://git-scm.com/downloads)
+### macOS / Linux
 
 ```bash
-git clone https://github.com/tirthch25/Indian-Farmer-Crop-Recommendation-System.git
+bash setup.sh
 ```
 
-After cloning, navigate into the project:
-```bash
-cd Indian-Farmer-Crop-Recommendation-System
-```
+The setup script checks Python, creates `agri_crop_recommendation/.venv`, installs packages, prepares `.env`, checks Ollama, verifies important files, and can start the server.
 
-> 💡 Alternatively, you can download the ZIP from GitHub (green "Code" button → Download ZIP) and extract it manually.
+Choose this path when you want the least manual work.
 
----
+## Option B: Manual Setup
 
-## 4. Create a Virtual Environment
+Use this path when you want to see each step.
 
-A virtual environment keeps project dependencies isolated from your system Python. **Highly recommended.**
-
-Navigate to the app directory first:
 ```bash
 cd agri_crop_recommendation
+python -m venv .venv
 ```
 
-Then create and activate the virtual environment:
+Activate the environment:
 
-### 🪟 Windows (PowerShell)
 ```powershell
-python -m venv .venv
+# Windows PowerShell
 .venv\Scripts\activate
 ```
 
-> If you get a policy error in PowerShell, run:
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
-> Then try activating again.
-
-### 🍎 macOS / 🐧 Linux
 ```bash
-python3 -m venv .venv
+# macOS / Linux
 source .venv/bin/activate
 ```
 
-**How to know it worked:** Your terminal prompt should now show `(.venv)` at the beginning.
-
-To **deactivate** the environment later:
-```bash
-deactivate
-```
-
----
-
-## 5. Install Dependencies
-
-Make sure your virtual environment is **active** (you see `(.venv)` in your prompt), then run:
+Upgrade pip and install dependencies:
 
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-This installs all required packages:
+Start the app:
 
-| Package          | Purpose                                             |
-|-----------------|-----------------------------------------------------|
-| `fastapi`        | Web API framework                                   |
-| `uvicorn`        | ASGI web server                                     |
-| `torch`          | PyTorch — LSTM weather forecasting                  |
-| `xgboost`        | XGBoost — weather forecasting                       |
-| `scikit-learn`   | Random Forest — crop suitability                    |
-| `pandas`         | Data processing                                     |
-| `numpy`          | Numerical computing                                 |
-| `requests`       | HTTP calls to weather APIs                          |
-| `jinja2`         | Web template rendering                              |
-| `pyarrow`        | Parquet file support (weather data)                 |
-| `joblib`         | Model serialization                                 |
-| `matplotlib`     | Plotting (used during training)                     |
-| `ollama`         | Local LLaMA/Gemma LLM *(primary AI provider)*       |
-| `google-genai`   | Google Gemini LLM API *(automatic fallback)*        |
-
-> ⏳ Installation may take **3–10 minutes** as PyTorch is a large package (~700 MB).
-
----
-
-## 5b. Set Up Ollama — Local LLM (Recommended)
-
-> This step enables the AI farming chat and crop explanations using **LLaMA 3.2 running entirely on your machine** — free, private, no internet needed.
-
-### 🪟 Windows (Automated — run once)
-```powershell
-# Automated setup script (installs Ollama + pulls llama3.2):
-.\scripts\setup_ollama.ps1
-
-# OR manually:
-# 1. Download from https://ollama.com/download and install
-# 2. Open a new terminal and run:
-ollama pull llama3.2      # ~2 GB download
-ollama serve              # Start the local server
-```
-
-### 🍎 macOS / 🐧 Linux
 ```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Pull and run the model
-ollama pull llama3.2
-ollama serve
+python run_website.py
 ```
 
-### Available Models
+Open:
 
-| Model | Size | RAM Needed | Quality | Best For |
-|-------|------|-----------|---------|----------|
-| `gemma3:2b` | 1.6 GB | 3 GB | Good | Low-resource machines |
-| `llama3.2` | 2.0 GB | 4 GB | **Very Good** | **Recommended** |
-| `llama3.1` | 4.7 GB | 8 GB | Excellent | Best answers |
+```text
+http://localhost:8000
+```
 
-### Configure .env
-Create `.env` inside `agri_crop_recommendation/` from the example:
+## Environment File
+
+Create `.env` inside `agri_crop_recommendation/`:
+
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Windows PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Recommended values:
+
 ```env
-# Primary LLM — local LLaMA via Ollama (free, private)
 LLM_PROVIDER=ollama
 OLLAMA_MODEL=llama3.2
 OLLAMA_BASE_URL=http://localhost:11434
 
-# Optional Gemini fallback (auto-used if Ollama is not running)
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=
+GEMINI_API_KEY_2=
+GEMINI_API_KEY_3=
 ```
 
-> **Without any LLM:** The system works fully in ML-only mode — crop recommendations, scoring, risk assessment, pest warnings, and planting calendars all work without any LLM.
+Use these modes:
 
----
+| Mode | `.env` Setup | Best For |
+| --- | --- | --- |
+| Local-first | `LLM_PROVIDER=ollama` | Private local chat and enrichment |
+| Cloud fallback | `LLM_PROVIDER=ollama` plus `GEMINI_API_KEY` | Resilience if Ollama is stopped |
+| Cloud-only | `LLM_PROVIDER=gemini` plus `GEMINI_API_KEY` | Machines that cannot run a local model |
+| No LLM | Leave keys blank and do not run Ollama | Core recommendations without AI chat |
 
-## 6. Run the Application
+## Ollama Setup
 
-Make sure you are inside the `agri_crop_recommendation/` folder with the virtual environment active.
+Install Ollama from:
+
+```text
+https://ollama.com/download
+```
+
+Pull the default model:
+
+```bash
+ollama pull llama3.2
+```
+
+Start Ollama if it is not already running:
+
+```bash
+ollama serve
+```
+
+Check installed models:
+
+```bash
+ollama list
+```
+
+Try the model:
+
+```bash
+ollama run llama3.2
+```
+
+Model options:
+
+| Model | Typical Use |
+| --- | --- |
+| `llama3.2` | Recommended default balance |
+| `gemma3:2b` | Lighter local model for low-resource machines |
+| `llama3.1` | Larger model with stronger responses, if your machine can handle it |
+
+After changing `OLLAMA_MODEL`, pull that model and restart the app.
+
+## Run And Verify
+
+Start the server:
 
 ```bash
 python run_website.py
 ```
 
-You should see output like:
-```
-======================================================================
-🌾 FARMER CROP RECOMMENDATION SYSTEM
-======================================================================
-
-Starting web server...
-
-📍 Access the website at: http://localhost:8000
-📍 API documentation at: http://localhost:8000/docs
-
-Press CTRL+C to stop the server
-
-======================================================================
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-```
-
-✅ The server is now running! Open your browser and go to:
-
-| URL                              | What you see                         |
-|----------------------------------|--------------------------------------|
-| `http://localhost:8000`          | 🌾 Farmer-friendly Web Interface      |
-| `http://localhost:8000/docs`     | 📡 Interactive Swagger API Docs       |
-| `http://localhost:8000/health`   | 🟢 API health check (JSON response)   |
-| `http://localhost:8000/regions`  | 📍 List of all 640+ supported regions |
-
-To **stop the server**, press `Ctrl + C` in the terminal.
-
----
-
-## 7. (Optional) Fetch District Weather Data
-
-> ⚠️ **This step is optional.** The app works without it using zone-level climate data fallback. Do this only if you want full district-level LSTM/XGBoost accuracy.
-
-This script downloads historical daily weather data for **640+ districts across 34 Indian states** from the Open-Meteo API.
+Health check:
 
 ```bash
-python scripts/fetch_district_weather.py
+curl http://localhost:8000/health
 ```
 
-> ⏳ **Estimated time:** 2–6 hours depending on your internet speed and API rate limits.  
-> 💾 **Disk space:** ~300–500 MB for the full district dataset.  
-> ✅ Progress is saved incrementally — you can stop and resume safely.
+Browser checks:
 
----
+```text
+http://localhost:8000
+http://localhost:8000/docs
+http://localhost:8000/health
+```
 
-## 8. (Optional) Train the Weather & Suitability Models
+Expected health response includes:
 
-> ⚠️ **This step is optional.** The app works perfectly without it — it falls back to rule-based scoring automatically. Train only if you want full ML-enhanced predictions.
+- `status`
+- `version`
+- `regions_loaded`
+- `ml_models`
+- `llm_available`
+- `llm_provider`
+- `ollama_running`
+- `timestamp`
 
-The system has **three separate ML models**, each trained by the same script using the `--model` flag.
+## Using The Web App
 
-### 🔁 Model Overview
+1. Select a country.
+2. Select a state or province.
+3. Select a district or region.
+4. Choose irrigation.
+5. Optionally provide soil texture and pH.
+6. Set the planning period.
+7. Click `Analyze with AI Agent`.
+8. Watch the streaming progress steps.
+9. Review weather, soil, forecast, market, and crop ranking cards.
+10. Ask a follow-up question in chat.
 
-| Model | Flag | Requires District Data? | What it does |
-|-------|------|------------------------|--------------|
-| **Random Forest** | `--model rf` | ❌ No | Predicts crop suitability scores |
-| **XGBoost Weather** | `--model xgboost_weather` | ✅ Yes (Step 7) | Forecasts temperature & rainfall |
-| **LSTM Weather** | `--model lstm_weather` | ✅ Yes (Step 7) | Deep learning weather forecasting |
-| **All three** | `--model all` | ✅ Yes (Step 7) | Trains RF → XGBoost → LSTM in sequence |
+Good first test:
 
----
+```text
+Country: India
+State: Maharashtra
+District: Pune
+Irrigation: Limited
+Planning period: 90
+Soil: Loam, pH 6.8
+```
 
-### 8a. Train the Random Forest (Crop Suitability)
+## API Smoke Tests
 
-> ✅ **No district weather data needed.** This is the easiest model to train and is recommended as a starting point.
+With the server running:
 
 ```bash
-python scripts/train_model.py --model rf
+curl http://localhost:8000/api/countries
+curl http://localhost:8000/health
 ```
 
-**What happens:**
-1. Generates synthetic training data (~50 weather scenarios per crop/region combination)
-2. Trains a Random Forest model to predict crop suitability scores (0–100)
-3. Prints top feature importances (temperature, water, soil, etc.)
-4. Saves the model to `models/crop_suitability/`
+Legacy recommendation example for Windows PowerShell:
 
-**Expected terminal output:**
-```
-============================================================
-  Crop Recommendation System — Model Trainer
-  Model target: RF
-============================================================
-
-============================================================
-  RANDOM FOREST — Crop Suitability
-============================================================
-  Generating training data (50 scenarios/combo) — streaming to disk...
-  ✓ Saved 45,000 records → data/ml/training/crop_suitability/...
-
-  Top features:
-    temp_compatibility        0.2341 ████████████████████████
-    water_availability        0.1987 ████████████████████
-    ...
-
-  ✓ Model saved → models/crop_suitability/
-  Train R²: 0.9512 | Test R²: 0.8934 | RMSE: 4.2301
+```powershell
+curl -X POST http://localhost:8000/recommend ^
+  -H "Content-Type: application/json" ^
+  -d "{\"region_id\":\"MH_PUNE\",\"irrigation\":\"Limited\",\"planning_days\":90}"
 ```
 
-**Output files created:**
-```
-models/crop_suitability/
-├── rf_model.joblib           ← Trained model
-├── label_encoders.joblib     ← Encoded region/soil labels
-├── metadata.json             ← Training metadata
-└── feature_importance.png    ← Feature importance chart
-```
-
-**Optional flags for RF:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--scenarios N` | `50` | Weather scenarios per crop/region combo. Use `100`+ for better accuracy |
-| `--estimators N` | `200` | Number of trees. More = slower but better |
-| `--max-depth N` | `15` | Max tree depth. Higher = more complex model |
-| `--regenerate` | off | Force re-generate training data even if it already exists |
-
-**Example — higher quality training:**
-```bash
-python scripts/train_model.py --model rf --scenarios 100 --estimators 300
-```
-
----
-
-### 8b. Train the XGBoost Weather Model
-
-> ⚠️ **Requires district weather data** — complete Step 7 first.
+For macOS/Linux, use backslashes instead of `^`:
 
 ```bash
-python scripts/train_model.py --model xgboost_weather
+curl -X POST http://localhost:8000/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"region_id":"MH_PUNE","irrigation":"Limited","planning_days":90}'
 ```
 
-**What happens:**
-1. Reads Parquet files from `data/weather/district/` (all 640+ districts)
-2. Engineers lag features and rolling statistics for temperature and rainfall
-3. Trains **three separate XGBoost models**: `temp_max`, `temp_min`, `rainfall`
-4. Saves models to `models/weather_xgboost/`
+The web UI uses:
 
-**Expected terminal output:**
-```
-============================================================
-  XGBOOST — Weather Forecasting
-============================================================
-  Loading district data from data/weather/district ...
-  Training temp_max model on 640 districts...
-  Training temp_min model on 640 districts...
-  Training rainfall model on 640 districts...
-  [OK] XGBoost weather model saved -> models/weather_xgboost/
+```text
+POST /api/analyze/stream
 ```
 
-**Output files created:**
-```
-models/weather_xgboost/
-├── temp_max_model.joblib    ← Max temperature model
-├── temp_min_model.joblib    ← Min temperature model
-├── rainfall_model.joblib    ← Rainfall model
-└── metadata.json            ← District encoder + training info
-```
+That endpoint streams Server-Sent Events so the user sees progress while weather and AI work is running.
 
-**Optional flags for XGBoost:**
+## Model And Data Checks
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--estimators N` | `200` | Number of boosting trees |
-| `--sample N` | all | Only use N districts (useful for quick testing) |
-| `--data-dir PATH` | `data/weather/district` | Custom path to district data |
+Run these from `agri_crop_recommendation/`:
 
-**Quick test run (10 districts only):**
-```bash
-python scripts/train_model.py --model xgboost_weather --sample 10
-```
-
-> ⏳ **Estimated time:** 5–20 minutes (full 455 districts). Use `--sample 10` for a 1-minute test run.
-
----
-
-### 8c. Train the LSTM Weather Model (PyTorch)
-
-> ⚠️ **Requires district weather data** — complete Step 7 first.
-
-```bash
-python scripts/train_model.py --model lstm_weather
-```
-
-**What happens:**
-1. Reads district weather Parquet files and builds 30-day lookback sequences
-2. Trains a PyTorch LSTM network to forecast temperature and rainfall 7 days ahead
-3. Encodes each district as an embedding for district-aware predictions
-4. Saves weights to `models/weather_lstm/`
-
-**Expected terminal output:**
-```
-============================================================
-  LSTM — Weather Forecasting (PyTorch)
-============================================================
-  Loading district data...
-  Building sequences for 640 districts...
-  Epoch [1/20] Loss: 0.5952
-  Epoch [2/20] Loss: 0.5677
-  ...
-  Epoch [20/20] RMSE: 0.4502
-  [OK] LSTM weather model saved -> models/weather_lstm/
-```
-
-**Output files created:**
-```
-models/weather_lstm/
-├── lstm_weights.pt     ← PyTorch model weights
-└── metadata.json       ← District encoder, RMSE, epoch count
-```
-
-**Optional flags for LSTM:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--epochs N` | `20` | Training epochs. More = better but slower |
-| `--batch-size N` | `512` | Batch size. Lower if running out of RAM |
-| `--device cpu/cuda` | `cpu` | Use `cuda` if you have an NVIDIA GPU |
-| `--sample N` | all | Only use N districts (for quick testing) |
-| `--data-dir PATH` | `data/weather/district` | Custom path to district data |
-
-**Quick test run (10 districts, 5 epochs):**
-```bash
-python scripts/train_model.py --model lstm_weather --sample 10 --epochs 5
-```
-
-**GPU training (much faster if available):**
-```bash
-python scripts/train_model.py --model lstm_weather --device cuda --epochs 30
-```
-
-> ⏳ **Estimated time:** 2–3 hrs on CPU (full 455-district dataset, 1.8M sequences, 20 epochs). ~15–30 min with a GPU.
-
----
-
-### 8d. Train All Models at Once
-
-Trains Random Forest → XGBoost → LSTM in sequence:
-
-```bash
-python scripts/train_model.py --model all
-```
-
-**Production-quality full training:**
-```bash
-python scripts/train_model.py --model all --epochs 30 --estimators 300 --scenarios 100
-```
-
-> ⏳ **Estimated total time:** 1–3 hours on CPU with full district data.
-
----
-
-### 8e. Verify Models Are Loaded
-
-After training, start the server and check `/health`:
-
-```bash
-python run_website.py
-```
-
-Then open `http://localhost:8000/health` in your browser. You should see:
-```json
-{
-  "status": "healthy",
-  "version": "2.6",
-  "regions_loaded": 640,
-  "ml_models": {
-    "crop_suitability_rf": "loaded"
-  },
-  "llm_available": true,
-  "llm_provider": "ollama",
-  "llm_model": "ollama/llama3.2",
-  "ollama_running": true,
-  "gemini_fallback": true
-}
-```
-
-You can also run the model verification script:
 ```bash
 python scripts/verify_models.py
+python scripts/test_api.py
+python scripts/test_chatbot.py
 ```
 
-Expected output:
-```
-LSTM: 455 districts, final_rmse=0.4502, epochs=20
-XGB:  455 districts trained
-...
-PASSED - LSTM inference working for new districts
-```
+Important folders:
 
----
+```text
+models/
+|-- crop_suitability/
+|-- weather_lstm/
+`-- weather_xgboost/
 
-## 9. Using the Web Interface
-
-Once the server is running, open `http://localhost:8000` in your browser.
-
-### Step-by-step:
-
-1. **Select your Region** — Choose your district from the dropdown (e.g., `MH_PUNE` for Pune, Maharashtra)  
-   OR enter GPS coordinates (latitude/longitude)
-
-2. **Set Soil Information** *(optional)* — Provide soil texture, pH, organic matter, and drainage.  
-   Defaults are used if you skip this.
-
-3. **Select Irrigation Level** — `None`, `Limited`, or `Full`
-
-4. **Set Planning Days** — How many days ahead you want to plan (15–365 days)
-
-5. **Click "Get Recommendations"** — The system will:
-   - Fetch real-time weather from Open-Meteo
-   - Detect the current season (Kharif / Rabi / Zaid)
-   - Score 50+ crops using ML + rule-based engine
-   - Return **top 15 crops** with scores, risks, pest warnings, and planting calendar
-
-### What happens when you select a district
-As soon as you pick your district from the dropdown, the system automatically:
-- Fetches **live real-time temperature** from Open-Meteo for that exact district
-- Shows a `📡 Live: 38°C high · 24°C low` weather pill above the chat window
-- Pre-loads temperature data into the AI chat context — so asking _"What is today's temperature?"_ gives an accurate, real answer
-
-### Interface features:
-- 🌐 **Hindi/English bilingual** — Switch languages using the toggle
-- 📊 Green/Orange/Red **suitability score bars**
-- 🌡️ **Month-wise climate chart** (Jan–Dec) with current month highlighted
-- 🐛 **Pest warning badges** per crop
-- 📅 **Planting calendar** — sowing → germination → flowering → harvest dates
-
----
-
-## 10. Using the API
-
-The REST API is accessible at `http://localhost:8000`. Full interactive documentation is at `/docs`.
-
-### Quick Example — Get Crop Recommendations
-
-**Request:**
-```bash
-curl -X POST http://localhost:8000/recommend \
-  -H "Content-Type: application/json" \
-  -d '{
-    "region_id": "MH_PUNE",
-    "irrigation": "Limited",
-    "planning_days": 90
-  }'
+data/reference/
+|-- regions.json
+|-- world_locations.json
+|-- regional_crops.json
+`-- crop_knowledge.json
 ```
 
-**Using GPS coordinates:**
-```bash
-curl -X POST http://localhost:8000/recommend \
-  -H "Content-Type: application/json" \
-  -d '{
-    "latitude": 18.5204,
-    "longitude": 73.8567,
-    "irrigation": "Full",
-    "planning_days": 60
-  }'
+Retraining scripts live in:
+
+```text
+scripts/
 ```
 
-### Other Endpoints
+Use verification before retraining. Training may be slow and memory-intensive depending on the model.
 
-| Method | Endpoint                             | Description                                  |
-|--------|--------------------------------------|----------------------------------------------|
-| `POST` | `/recommend`                         | Get top **15** crop recommendations          |
-| `GET`  | `/weather/now/{region_id}`           | **Live temperature** for a district (new!)   |
-| `GET`  | `/forecast/{region_id}?days=7`       | ML weather forecast for a region             |
-| `POST` | `/risk-assessment`                   | Drought/temperature/event risk for a crop    |
-| `GET`  | `/pest-warnings/{region_id}`         | Pest & disease warnings for a region         |
-| `GET`  | `/planting-calendar/{crop_id}`       | Sowing-to-harvest calendar for a crop        |
-| `POST` | `/chat/stream`                       | AI farming Q&A chat — streaming (**LLaMA 3.2** / Gemini fallback) |
-| `GET`  | `/regions`                           | List all 640+ supported regions              |
-| `GET`  | `/health`                            | API health check + ML model status           |
-| `GET`  | `/docs`                              | Swagger interactive API explorer             |
+## Design Notes For Contributors
 
----
+The app should stay visually consistent with the current dashboard:
 
-## 11. Troubleshooting
+- White/light surfaces.
+- Compact form controls.
+- Green agricultural accents.
+- Blue analysis/progress states.
+- Clear metric cards.
+- Dense, readable crop recommendations.
+- No decorative landing page before the working tool.
 
-### ❌ `python` not found / `'python' is not recognized`
-- Make sure Python is installed and added to PATH (see Step 2)
-- On macOS/Linux, try using `python3` instead of `python`
+The user should always feel close to the decision: where is the farm, what is the weather, what is the soil, what crop is safest, and why?
 
-### ❌ Virtual environment activation fails on Windows
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-.venv\Scripts\activate
-```
+## Troubleshooting
 
-### ❌ `pip install -r requirements.txt` fails
-- Make sure your virtual environment is **active** (`(.venv)` prefix in prompt)
-- Try upgrading pip first:
-  ```bash
-  pip install --upgrade pip
-  ```
-- If `torch` fails to install, visit [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/) to get the exact install command for your OS/CUDA version.
+| Problem | Cause | Fix |
+| --- | --- | --- |
+| `python` not found | Python is missing or not on PATH | Install Python 3.8+ and enable `Add Python to PATH` |
+| PowerShell activation blocked | Execution policy restriction | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| `pip install` fails | Old pip or interrupted install | `python -m pip install --upgrade pip`, then retry |
+| `ModuleNotFoundError: src` | Command run from wrong folder | Run from `agri_crop_recommendation/` |
+| `ModuleNotFoundError: pydantic` | Dependencies missing in active Python | Activate `.venv` and run `pip install -r requirements.txt` |
+| Chat unavailable | Ollama stopped or no Gemini key | Start `ollama serve` or add `GEMINI_API_KEY` |
+| Ollama model missing | Model was not pulled | `ollama pull llama3.2` |
+| Weather unavailable | API/network issue | Retry later; fallback estimates may be used |
+| Port 8000 in use | Another server is running | Stop it or run uvicorn on another port |
+| Missing model files | Artifacts absent or moved | `python scripts/verify_models.py` |
 
-### ❌ Port 8000 already in use
-Run the server on a different port:
+Run on another port:
+
 ```bash
 python -c "import uvicorn; uvicorn.run('src.api.app:app', host='0.0.0.0', port=8080)"
 ```
-Then open `http://localhost:8080`.
 
-### ❌ `ModuleNotFoundError: No module named 'src'`
-Make sure you are running from inside the `agri_crop_recommendation/` folder:
+Then open:
+
+```text
+http://localhost:8080
+```
+
+## Common Commands
+
 ```bash
-cd agri_crop_recommendation
+# Start app
 python run_website.py
+
+# Verify models
+python scripts/verify_models.py
+
+# Run API checks
+python scripts/test_api.py
+
+# Test chat integration
+python scripts/test_chatbot.py
+
+# Check installed Ollama models
+ollama list
+
+# Pull default LLM
+ollama pull llama3.2
 ```
 
-### ❌ Weather data fetch is very slow
-This is normal — the Open-Meteo API rate-limits requests. The script fetches ~640 districts and will take several hours. You can safely stop with `Ctrl+C` and resume later; progress is saved.
+## What To Do After Setup
 
-### ❌ ML models not loaded (shows "not_trained" in `/health`)
-This is expected if you haven't run Step 8. The app falls back to rule-based scoring automatically. Run `python scripts/train_model.py` to enable ML predictions.
-
-### ❌ District shows very few crop recommendations (< 5)
-This was a known bug in v2.7 and earlier where the temperature scoring returned a hard zero for any crop slightly above its absolute temperature limit, causing most crops in hot districts (Solapur, Jaisalmer, Indore etc.) to be ranked near-zero. **This is fixed in v2.8** with an 8°C grace margin. Make sure you have the latest code and **restart the server** after updating:
-```powershell
-# Stop current server (Ctrl+C), then:
-python run_website.py
-```
-
-### ❌ "What is today's temperature?" gives wrong answer
-Ensure you have selected a district from the dropdown before asking — this triggers the automatic `GET /weather/now/{region_id}` fetch that pre-loads real temperature data into the chat context. The 📡 weather pill above the chat window confirms the data has been loaded.
-
----
-
-## 12. Project Folder Overview
-
-```
-Indian-Farmer-Crop-Recommendation-System/
-│
-└── agri_crop_recommendation/          ← Main application folder (work here)
-    │
-    ├── run_website.py                 ← ▶ START HERE — runs the web server
-    ├── requirements.txt               ← All Python dependencies
-    │
-    ├── src/                           ← Core source code
-    │   ├── api/app.py                 ← FastAPI routes & endpoints
-    │   ├── crops/                     ← Crop database & soil models
-    │   ├── ml/                        ─ LSTM, XGBoost, Random Forest
-    │   ├── services/                  ─ Recommender, risk, pest, calendar, LLM
-    │   ├── utils/                     ─ Region manager, season detection
-    │   └── weather/
-    │       ├── fetcher.py             ─ Open-Meteo real-time weather
-    │       └── forecast.py            ─ ML forecast engine
-    │
-    ├── data/
-    │   ├── reference/                 ← regions.json, crop_knowledge.json
-    │   └── weather/
-    │       ├── zone/                  ← Zone-level monthly climate normals (CSV)
-    │       └── district/              ← District-level daily weather (Parquet, after Step 7)
-    │
-    ├── models/                        ─ Trained ML model files
-    │   ├── crop_suitability/          ─ Random Forest (rf_model.joblib)
-    │   ├── weather_lstm/              ─ LSTM weights (lstm_weights.pt)
-    │   └── weather_xgboost/           ─ XGBoost models (temp/rainfall .joblib)
-    │
-    ├── templates/index.html           ─ Web UI
-    ├── static/css/style.css           ─ Frontend styles
-    ├── static/js/app.js               ─ Frontend JavaScript
-    │
-    └── scripts/
-        ├── fetch_district_weather.py  ─ Step 7: Download district weather data
-        ├── train_model.py             ─ Step 8: Train weather & suitability models
-        ├── test_api.py                ─ API smoke tests
-        └── test_recommend.py         ─ Recommendation integration tests
-```
-
----
-
-## ✅ Quick Start Checklist
-
-```
-[ ] Python 3.8+ installed
-[ ] Repository cloned or downloaded
-[ ] cd into agri_crop_recommendation/
-[ ] Virtual environment created and activated
-[ ] pip install -r requirements.txt completed
-[ ] Ollama installed + llama3.2 pulled  (run: .\scripts\setup_ollama.ps1)
-[ ] .env file created with LLM_PROVIDER=ollama
-[ ] python run_website.py running
-[ ] Browser opened at http://localhost:8000
-[ ] http://localhost:8000/health shows ollama_running: true
-[ ] Optional: GEMINI_API_KEY in .env as fallback
-```
-
----
-
-## 📞 Need Help?
-
-- 📂 **GitHub Issues:** [Open an issue](https://github.com/tirthch25/Indian-Farmer-Crop-Recommendation-System/issues)
-- 📖 **API Docs (interactive):** `http://localhost:8000/docs` (once the server is running)
-- 📄 **Full Feature Documentation:** See [`README.md`](./README.md)
-
----
-
-<div align="center">
-  <strong>🌾 Built with ❤️ for Indian Farmers</strong><br/>
-  <em>Empowering agriculture through data and technology — C-DAC</em>
-</div>
+- Try two districts with different climates and compare recommendations.
+- Change irrigation from `None` to `Full` and observe crop ranking changes.
+- Override soil pH and texture to test sensitivity.
+- Ask the chat assistant why the top crop is safer than the second crop.
+- Open `/docs` and inspect the request models.
