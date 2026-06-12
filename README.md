@@ -315,6 +315,17 @@ agri_crop_recommendation/
 
 ---
 
+## 🙏 Acknowledgements
+
+This project was made possible by several incredible open-source projects and data providers:
+- **[Open-Meteo](https://open-meteo.com/)** for providing a fantastic, free, and robust weather API.
+- **[Ollama](https://ollama.com/)** for making local LLM inference effortless.
+- **[Meta LLaMA](https://llama.meta.com/)** for their powerful open-weights LLaMA 3.2 model.
+- **[FastAPI](https://fastapi.tiangolo.com/)** for the high-performance Python web framework.
+- **[Google Gemini](https://deepmind.google/technologies/gemini/)** for their lightning-fast cloud LLM API used as our fallback engine.
+
+---
+
 ## 📄 License
 
 MIT License — see the [LICENSE](LICENSE) file for details.
