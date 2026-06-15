@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
   <!-- chart.js removed: forecast now shown as a table -->
-  <link rel="stylesheet" href="/static/css/style.css?v=3.1">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.2">
 </head>
 
 <body>
@@ -244,6 +244,125 @@
         <p class="district-summary" id="districtSummary"></p>
       </section>
 
+      <!-- ── Climate Intelligence Panel ── -->
+      <section class="card climate-card" id="climate-section" style="display:none">
+        <div class="card-header">
+          <h2>🌐 Climate Intelligence</h2>
+          <span class="badge badge-agent" id="climateSource">NOAA + Gemini Search + Live Weather</span>
+        </div>
+
+        <!-- ENSO Phase Banner -->
+        <div class="enso-banner" id="ensoBanner">
+          <div class="enso-phase-badge" id="ensoPhase">
+            <span class="enso-phase-icon" id="ensoIcon">🟢</span>
+            <span class="enso-phase-text" id="ensoPhaseText">Loading...</span>
+          </div>
+          <div class="enso-oni" id="ensoOni"></div>
+        </div>
+
+        <!-- Alert bar (shown when any threat is active) -->
+        <div class="climate-alert hidden" id="climateAlert">
+          <span class="alert-icon">⚠️</span>
+          <span id="climateAlertText"></span>
+        </div>
+
+        <!-- AI Summary (comprehensive — covers all threats) -->
+        <div class="climate-summary" id="climateSummary"></div>
+
+        <!-- ── 7 Threat Badges ── -->
+        <div class="threat-grid" id="threatGrid">
+          <div class="threat-tile" id="tileHeat">
+            <div class="threat-tile-icon">🌡️</div>
+            <div class="threat-tile-label">Heat Stress</div>
+            <div class="threat-tile-value" id="heatRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileDrought">
+            <div class="threat-tile-icon">🏜️</div>
+            <div class="threat-tile-label">Drought</div>
+            <div class="threat-tile-value" id="droughtRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileFrost">
+            <div class="threat-tile-icon">🌨️</div>
+            <div class="threat-tile-label">Frost</div>
+            <div class="threat-tile-value" id="frostRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileFlood">
+            <div class="threat-tile-icon">🌊</div>
+            <div class="threat-tile-label">Flood</div>
+            <div class="threat-tile-value" id="floodRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileCyclone">
+            <div class="threat-tile-icon">🌀</div>
+            <div class="threat-tile-label">Cyclone/Storm</div>
+            <div class="threat-tile-value" id="cycloneRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileWildfire">
+            <div class="threat-tile-icon">🔥</div>
+            <div class="threat-tile-label">Wildfire</div>
+            <div class="threat-tile-value" id="wildfireRisk">—</div>
+          </div>
+          <div class="threat-tile" id="tileEnso">
+            <div class="threat-tile-icon">🌊</div>
+            <div class="threat-tile-label">ENSO Impact</div>
+            <div class="threat-tile-value" id="ensoImpact">—</div>
+          </div>
+        </div>
+
+        <!-- Rainfall + Temperature outlook row -->
+        <div class="climate-impacts" id="climateImpacts">
+          <div class="impact-item">
+            <div class="impact-icon">🌧️</div>
+            <div class="impact-label">Rainfall Outlook</div>
+            <div class="impact-value" id="rainfallOutlook">-</div>
+          </div>
+          <div class="impact-item">
+            <div class="impact-icon">🌡️</div>
+            <div class="impact-label">Temperature Outlook</div>
+            <div class="impact-value" id="tempOutlook">-</div>
+          </div>
+          <div class="impact-item">
+            <div class="impact-icon">📊</div>
+            <div class="impact-label">Forecast Adjustment</div>
+            <div class="impact-value" id="forecastAdj">-</div>
+          </div>
+        </div>
+
+        <!-- Climate Change Trend -->
+        <div class="climate-trend" id="climateTrend" style="display:none">
+          <div class="trend-icon">📈</div>
+          <div class="trend-text" id="climateTrendText"></div>
+        </div>
+
+        <!-- Crop Risks -->
+        <div class="climate-risks" id="climateRisks" style="display:none">
+          <div class="risks-title">⚠️ All Active Climate Risks for Your Crops</div>
+          <ul class="risks-list" id="risksList"></ul>
+        </div>
+
+        <!-- Immediate Actions -->
+        <div class="climate-actions" id="climateActions" style="display:none">
+          <div class="actions-title">✅ Immediate Actions for This Week</div>
+          <ul class="actions-list" id="actionsList"></ul>
+        </div>
+
+        <!-- Seasonal Outlook -->
+        <div class="climate-outlook" id="climateOutlook" style="display:none">
+          <span class="outlook-icon">📅</span>
+          <span id="outlookText"></span>
+        </div>
+
+        <!-- Opportunity -->
+        <div class="climate-opportunity" id="climateOpportunity" style="display:none">
+          <span class="opp-icon">💡</span>
+          <span id="oppText"></span>
+        </div>
+
+        <div class="climate-footer">
+          <span>📡 NOAA CPC · Gemini Search Grounding · Open-Meteo Live Weather · AI Analysis</span>
+          <span id="climateFetchedAt"></span>
+        </div>
+      </section>
+
       <!-- 6-Month Forecast Table -->
       <section class="card forecast-table-card" id="forecast-section">
         <div class="card-header">
@@ -352,6 +471,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=3.1"></script>
+  <script src="/static/js/app.js?v=3.2"></script>
 </body>
 </html>

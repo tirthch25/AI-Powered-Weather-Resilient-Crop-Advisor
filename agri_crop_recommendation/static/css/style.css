@@ -619,3 +619,196 @@ option { background: #fff; color: var(--text); }
   color: white; border-color: transparent;
   box-shadow: 0 3px 10px rgba(22,163,74,0.3);
 }
+
+/* ── Climate Intelligence Panel ──────────────────────────────── */
+.climate-card { border-top: 3px solid #6366f1; }
+
+/* ENSO Banner */
+.enso-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 14px 18px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); margin-bottom: 14px;
+}
+.enso-phase-badge {
+  display: flex; align-items: center; gap: 10px;
+}
+.enso-phase-icon { font-size: 1.5rem; }
+.enso-phase-text {
+  font-size: 1rem; font-weight: 800;
+  font-family: 'Outfit', sans-serif; color: var(--text);
+}
+.enso-oni { font-size: 0.78rem; color: var(--text3); font-weight: 500; }
+
+/* ENSO phase color overrides */
+.enso-el-nino .enso-phase-text { color: var(--red); }
+.enso-la-nina .enso-phase-text { color: var(--blue); }
+.enso-neutral  .enso-phase-text { color: var(--green); }
+
+/* Alert bar */
+.climate-alert {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(234,88,12,0.08); border: 1px solid rgba(234,88,12,0.25);
+  font-size: 0.82rem; color: #c2410c; font-weight: 500;
+  animation: slideUp 0.4s ease;
+}
+.climate-alert .alert-icon { font-size: 1rem; flex-shrink: 0; }
+
+/* AI Summary text */
+.climate-summary {
+  font-size: 0.86rem; color: var(--text2); line-height: 1.75;
+  margin-bottom: 16px; padding: 12px 16px;
+  background: rgba(99,102,241,0.05); border-left: 3px solid #6366f1;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Impact grid (Rainfall / Temp / Forecast Adj) */
+.climate-impacts {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 12px; margin-bottom: 16px;
+}
+.impact-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px;
+  text-align: center; transition: all var(--trans);
+}
+.impact-item:hover { border-color: #6366f1; transform: translateY(-2px); }
+.impact-icon  { font-size: 1.4rem; margin-bottom: 6px; }
+.impact-label { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.impact-value { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.impact-value.below-normal { color: var(--orange); }
+.impact-value.above-normal { color: var(--blue);   }
+.impact-value.near-normal  { color: var(--green);  }
+
+/* Crop Risks */
+.climate-risks {
+  margin-bottom: 14px; padding: 12px 16px;
+  background: rgba(220,38,38,0.05); border: 1px solid rgba(220,38,38,0.15);
+  border-radius: var(--radius-sm);
+}
+.risks-title { font-size: 0.78rem; font-weight: 700; color: var(--red); margin-bottom: 8px; }
+.risks-list  { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.risks-list li {
+  font-size: 0.75rem; color: #b91c1c;
+  background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2);
+  padding: 3px 10px; border-radius: 99px;
+}
+
+/* Opportunity */
+.climate-opportunity {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 14px; padding: 10px 14px;
+  background: var(--green-light); border: 1px solid rgba(22,163,74,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem; color: #166534; font-weight: 500;
+}
+.opp-icon { font-size: 1rem; flex-shrink: 0; }
+
+/* Footer */
+.climate-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.68rem; color: var(--text3);
+}
+
+@media (max-width: 700px) {
+  .climate-impacts { grid-template-columns: 1fr 1fr; }
+  .enso-banner { flex-direction: column; align-items: flex-start; }
+}
+
+/* ENSO Watch phase color overrides (orange = El Nino developing, purple = La Nina developing) */
+.enso-el-nino-watch .enso-phase-text { color: #ea580c; }
+.enso-la-nina-watch .enso-phase-text { color: #7c3aed; }
+.enso-el-nino-watch { background: rgba(234,88,12,0.06); border-color: rgba(234,88,12,0.25); }
+.enso-la-nina-watch { background: rgba(124,58,237,0.06); border-color: rgba(124,58,237,0.25); }
+
+/* AI-generated location badge (shown when LLM generates states/districts) */
+.ai-location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.10);
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    border-radius: 20px;
+    padding: 2px 10px;
+    margin-top: 6px;
+    margin-left: 4px;
+    cursor: help;
+    animation: fadeInUp 0.3s ease;
+}
+
+/* ── Threat Grid (7 tile badges) ──────────────────────────────── */
+.threat-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.threat-tile {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 8px;
+  text-align: center;
+  transition: all var(--trans);
+  cursor: default;
+  box-shadow: var(--shadow-sm);
+}
+.threat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.threat-tile-icon  { font-size: 1.4rem; margin-bottom: 5px; line-height: 1; }
+.threat-tile-label {
+  font-size: 0.62rem; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 5px; line-height: 1.2;
+}
+.threat-tile-value { font-size: 0.8rem; font-weight: 700; }
+
+/* Climate trend bar */
+.climate-trend {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 14px; padding: 10px 14px;
+  background: rgba(99,102,241,0.06);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+.trend-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.trend-text { color: var(--text2); font-weight: 500; line-height: 1.6; }
+
+/* Immediate actions */
+.climate-actions {
+  margin-bottom: 14px; padding: 12px 16px;
+  background: rgba(22,163,74,0.05); border: 1px solid rgba(22,163,74,0.2);
+  border-radius: var(--radius-sm);
+}
+.actions-title { font-size: 0.78rem; font-weight: 700; color: var(--green); margin-bottom: 8px; }
+.actions-list  { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.actions-list li {
+  font-size: 0.78rem; color: #166534; padding: 3px 0 3px 20px; position: relative;
+}
+.actions-list li::before { content: '✅'; position: absolute; left: 0; font-size: 0.7rem; }
+
+/* Seasonal outlook */
+.climate-outlook {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 14px; padding: 10px 14px;
+  background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem; color: #1d4ed8; font-weight: 500;
+}
+.outlook-icon { font-size: 1rem; flex-shrink: 0; }
+
+/* Responsive: threat grid */
+@media (max-width: 900px) {
+  .threat-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 600px) {
+  .threat-grid { grid-template-columns: repeat(2, 1fr); }
+  .threat-tile-label { font-size: 0.6rem; }
+}

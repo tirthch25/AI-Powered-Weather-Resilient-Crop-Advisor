@@ -39,7 +39,13 @@ logger = logging.getLogger(__name__)
 # ── LLM config (for soil/market enrichment only) ──────────────────────────────
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-GEMINI_KEY   = os.getenv("GEMINI_API_KEY", "")
+GEMINI_KEYS: list = [k for k in [
+    os.getenv("GEMINI_API_KEY", ""),
+    os.getenv("GEMINI_API_KEY_2", ""),
+    os.getenv("GEMINI_API_KEY_3", ""),
+    os.getenv("GEMINI_API_KEY_4", ""),
+] if k.strip()]
+GEMINI_KEY = GEMINI_KEYS[0] if GEMINI_KEYS else ""  # kept for backward compat
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -400,14 +406,84 @@ def _build_forecast_6month(
 # 3. LLM ENRICHMENT: SOIL + MARKET PRICES
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _llm_enrich_with_search(location_str: str, country: str, current_temp: float, current_month: int) -> Optional[dict]:
+    """
+    Use Gemini Search Grounding to get REAL-TIME soil info, market prices,
+    and agricultural advisories for the location.
+    Only works with search-capable models (gemini-2.0-flash+).
+    Falls back to plain _llm_enrich if grounding is not available.
+    """
+    if not GEMINI_KEYS:
+        return None
+
+    prompt = (
+        f"Search for current agricultural data in {location_str}. "
+        f"Current temp: {current_temp}°C, Month: {current_month}. "
+        f"Find: real current market prices for crops grown there, "
+        f"typical soil type, and any active crop advisories. "
+        f"Return ONLY compact JSON (no markdown):\n"
+        f'{{"soil":{{"type":"<Clay/Loam/Sandy/Clay-Loam/Sandy-Loam>","ph":<4.5-8.5>,'
+        f'"organic_matter":"<Low/Medium/High>","drainage":"<Poor/Medium/Good>"}},'
+        f'"market_prices":{{"<crop1>":"<REAL current price+unit>","<crop2>":"<price+unit>","<crop3>":"<price+unit>"}},'
+        f'"district_summary":"<1 sentence about farming in this area>","climate_zone":"<Tropical/Subtropical/Arid/Temperate/Mediterranean>"}}\n'
+        f"Use local currency. soil.ph must be a number. Get real current prices, not estimates."
+    )
+
+    _SEARCH_MODELS = [
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash-001",
+    ]
+
+    try:
+        from google import genai as _g
+        from google.genai import types as _gt
+        for api_key in GEMINI_KEYS:
+            client_g = _g.Client(api_key=api_key)
+            for model in _SEARCH_MODELS:
+                try:
+                    resp = client_g.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=_gt.GenerateContentConfig(
+                            tools=[_gt.Tool(google_search=_gt.GoogleSearch())],
+                        ),
+                    )
+                    text = resp.text.strip() if resp.text else None
+                    result = _extract_json_safe(text) if text else None
+                    if result and isinstance(result, dict):
+                        logger.info("[DataAgent] Gemini search-grounded enrich OK (%s, key ...%s)", model, api_key[-6:])
+                        return result
+                except Exception as e:
+                    err = str(e)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        continue
+                    if "not supported" in err.lower() or "404" in err or "NOT_FOUND" in err:
+                        continue
+                    logger.debug("[DataAgent] Search enrich %s: %s", model, err[:80])
+                    continue
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug("[DataAgent] Search grounding unavailable: %s", e)
+    return None
+
+
 def _llm_enrich(location_str: str, country: str, current_temp: float, current_month: int) -> Optional[dict]:
     """
     Ask Gemini for soil info, market prices, and district summary.
-    Hard 5-second timeout — returns None immediately if LLM is slow/down.
-    Skips Ollama (too slow) — zone-based defaults are used as fallback.
+    First tries Search Grounding (real-time data), then falls back to plain Gemini.
+    Calls Gemini directly (no ThreadPoolExecutor) to avoid the httpx client
+    being closed when the thread exits. Falls back through model list on 429.
+    Returns None immediately if all LLM providers fail, so zone defaults are used.
     """
-    if not GEMINI_KEY:
+    if not GEMINI_KEYS:
         return None  # No API key → use zone defaults instantly
+
+    # ── Try search-grounded first for real-time prices ─────────────────────
+    grounded = _llm_enrich_with_search(location_str, country, current_temp, current_month)
+    if grounded:
+        return grounded
 
     prompt = (
         f"Agricultural data for {location_str}. Temp: {current_temp}°C, Month: {current_month}. "
@@ -419,37 +495,61 @@ def _llm_enrich(location_str: str, country: str, current_temp: float, current_mo
         f"Use local currency. soil.ph must be a number."
     )
 
-    def _call_gemini():
-        try:
-            from google import genai as _genai
-            client_g = _genai.Client(api_key=GEMINI_KEY)
-            resp = client_g.models.generate_content(model="gemini-2.0-flash-lite", contents=prompt)
-            return _extract_json_safe(resp.text.strip())
-        except ImportError:
-            try:
-                import google.generativeai as genai  # type: ignore
-                genai.configure(api_key=GEMINI_KEY)
-                resp = genai.GenerativeModel("gemini-2.0-flash-lite").generate_content(prompt)
-                return _extract_json_safe(resp.text.strip())
-            except Exception:
-                return None
-        except Exception:
-            return None
+    # Ordered list of models to try — same as llm_location_agent
+    _MODELS = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash-lite-001",
+        "gemini-flash-lite-latest",
+        "gemini-2.0-flash",
+    ]
 
+    # Call Gemini directly (NOT inside ThreadPoolExecutor) to avoid
+    # httpx async client being closed when thread exits.
+    # Rotate through all API keys on 429 errors.
     try:
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(_call_gemini)
-            result = future.result(timeout=5)  # hard 5-second cap
-            if result:
-                logger.info("[DataAgent] Gemini enrich OK")
-            return result
-    except FuturesTimeout:
-        logger.warning("[DataAgent] Gemini enrich timed out (>5s) — using zone defaults")
-        return None
+        from google import genai as _genai
+        for api_key in GEMINI_KEYS:
+            client_g = _genai.Client(api_key=api_key)
+            for model in _MODELS:
+                try:
+                    resp = client_g.models.generate_content(model=model, contents=prompt)
+                    result = _extract_json_safe(resp.text.strip()) if resp.text else None
+                    if result:
+                        logger.info("[DataAgent] Gemini enrich OK (%s, key ...%s)", model, api_key[-6:])
+                        return result
+                except Exception as me:
+                    err = str(me)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        logger.debug("[DataAgent] %s quota on key ...%s, trying next", model, api_key[-6:])
+                        continue
+                    logger.debug("[DataAgent] %s error: %s", model, err[:80])
+                    continue
+    except ImportError:
+        pass
     except Exception as e:
-        logger.warning(f"[DataAgent] Gemini enrich failed: {e}")
-        return None
+        logger.warning("[DataAgent] Gemini enrich failed: %s", e)
+
+    # Fallback: legacy google.generativeai SDK, rotate all keys
+    try:
+        import google.generativeai as genai  # type: ignore
+        for api_key in GEMINI_KEYS:
+            genai.configure(api_key=api_key)
+            for model in ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite"]:
+                try:
+                    resp = genai.GenerativeModel(model).generate_content(prompt)
+                    result = _extract_json_safe(resp.text.strip()) if resp.text else None
+                    if result:
+                        return result
+                except Exception:
+                    continue
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning("[DataAgent] Legacy Gemini enrich failed: %s", e)
+
+    logger.warning("[DataAgent] All Gemini models failed for enrich — using zone defaults")
+    return None
 
 def _extract_json_safe(text: str) -> Optional[dict]:
     """Robustly extract JSON from LLM response."""
@@ -589,19 +689,28 @@ def gather_location_data(
     lon: float,
     month: Optional[int] = None,
     state_code: Optional[str] = None,
+    llm_climate_zone: Optional[str] = None,
+    llm_crop_notes: Optional[str] = None,
+    location_source: str = "llm",
 ) -> dict:
     """
     Gather real agricultural data for any location worldwide.
 
     Data sources (in priority order):
-      1. Open-Meteo API → real current temperature, rainfall, wind, UV
-      2. Zone climatology (India: history.py; World: inline table) → 6-month forecast
+      1. Open-Meteo API -> real current temperature, rainfall, wind, UV
+      2. Zone climatology (India: history.py; World: inline table) -> 6-month forecast
          anchored to live temperature so each district is accurate
-      3. Gemini / Ollama LLM → soil type, pH, market prices, district summary
-      4. Zone-aware defaults → when LLM is unavailable
+      3. NOAA ENSO / Climate Signals -> El Nino/La Nina adjustments applied to forecast
+         (free, no API key -- cached 6 hours)
+      4. Gemini / Ollama LLM -> soil type, pH, market prices, district summary
+      5. Zone-aware defaults -> when LLM is unavailable
 
-    Returns dict with: current, forecast_6month, soil, season, climate_zone,
-                       market_prices, district_summary
+    llm_climate_zone / llm_crop_notes: optionally supplied by location_agent.resolve_full()
+    when the location was resolved via LLM geocoding.
+
+    Returns dict with: current, forecast_6month, forecast_6month_baseline, soil,
+                       season, climate_zone, market_prices, district_summary,
+                       climate_signal, location_source
     """
     current_month = month or datetime.datetime.now().month
     location_str  = f"{district}, {state}, {country}"
@@ -633,15 +742,34 @@ def gather_location_data(
 
     # ── 2. 6-month forecast from climatology + live anchor ───────────────────
     # Use state_code for India zone mapping; for other countries use country name
-    forecast_6month = _build_forecast_6month(
+    forecast_6month_baseline = _build_forecast_6month(
         country=country,
         state_code=state_code,
         lat=lat,
         live_temp_avg=current["temperature_c"],
         current_month=current_month,
     )
+    forecast_6month = list(forecast_6month_baseline)  # will be adjusted below
 
-    # ── 3. LLM enrichment for soil + market prices ───────────────────────────
+    # ── 3. ENSO / Climate Signal adjustments ────────────────────────────────
+    # Fetch from NOAA (free, cached 6h) + AI interpretation via existing Gemini/LLaMA
+    climate_signal: dict = {}
+    try:
+        from src.services.climate_signals import get_climate_signals, apply_enso_to_forecast
+        world_zone_for_enso = _get_world_zone(country, lat)
+        climate_signal = get_climate_signals(
+            location_str=location_str,
+            climate_zone=world_zone_for_enso,
+            country=country,
+        )
+        forecast_6month = apply_enso_to_forecast(forecast_6month, climate_signal)
+        logger.info(
+            f"[DataAgent] ENSO={climate_signal.get('enso_phase','?')} applied to forecast"
+        )
+    except Exception as _enso_err:
+        logger.warning(f"[DataAgent] Climate signal step skipped: {_enso_err}")
+
+    # ── 4. LLM enrichment for soil + market prices ───────────────────────────
     llm_data = _llm_enrich(location_str, country, current["temperature_c"], current_month)
 
     # ── 4. Assemble final result ─────────────────────────────────────────────
@@ -664,8 +792,10 @@ def gather_location_data(
     else:
         market_prices = _default_market_prices(country, world_zone)
 
-    # Climate zone label
-    if llm_data and llm_data.get("climate_zone"):
+    # Climate zone label — prefer LLM-resolved zone, then Gemini enrichment, then zone table
+    if llm_climate_zone and llm_climate_zone not in ("", "Subtropical"):
+        climate_zone = llm_climate_zone
+    elif llm_data and llm_data.get("climate_zone"):
         climate_zone = llm_data["climate_zone"]
     else:
         zone_labels = {
@@ -677,28 +807,38 @@ def gather_location_data(
         }
         climate_zone = zone_labels.get(world_zone, "Subtropical")
 
-    # District summary
+
+    # District summary — prefer LLM enrichment, then crop_notes from location agent
     if llm_data and llm_data.get("district_summary"):
         district_summary = llm_data["district_summary"]
+    elif llm_crop_notes:
+        district_summary = llm_crop_notes
     else:
         district_summary = (
-            f"{district} is an agricultural district in {state}, {country}. "
-            f"The region experiences {climate_zone.lower()} climate conditions "
-            f"with current temperature around {current['temperature_c']}°C."
+            district + " is an agricultural district in " + state + ", " + country + ". "
+            "The region experiences " + climate_zone.lower() + " climate conditions "
+            "with current temperature around " + str(current["temperature_c"]) + "C."
         )
+
 
     # Season
     season = _guess_season(current_month, country)
 
-    logger.info(f"[DataAgent] Complete: temp={current['temperature_c']}°C, "
-                f"soil={soil['type']}, zone={climate_zone}, crops={len(market_prices)}")
+    logger.info(
+        "[DataAgent] Complete: temp=%sC, soil=%s, zone=%s, source=%s, enso=%s",
+        current["temperature_c"], soil["type"], climate_zone,
+        location_source, climate_signal.get("enso_phase", "N/A")
+    )
 
     return {
-        "current":         current,
-        "forecast_6month": forecast_6month,
-        "soil":            soil,
-        "season":          season,
-        "climate_zone":    climate_zone,
-        "market_prices":   market_prices,
-        "district_summary":district_summary,
+        "current":                  current,
+        "forecast_6month":          forecast_6month,           # ENSO-adjusted
+        "forecast_6month_baseline": forecast_6month_baseline,  # raw climatology
+        "soil":                     soil,
+        "season":                   season,
+        "climate_zone":             climate_zone,
+        "market_prices":            market_prices,
+        "district_summary":         district_summary,
+        "climate_signal":           climate_signal,            # ENSO phase + AI interpretation
+        "location_source":          location_source,           # "llm" | "fallback"
     }

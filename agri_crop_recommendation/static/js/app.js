@@ -65,24 +65,29 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => { $('unreadBadge').style.display = 'flex'; }, 3000);
 });
 
-// ── LOCATION LOADERS ───────────────────────────────────────────────────────
+// ── LOCATION LOADERS ─────────────────────────────────────────────────────────
+// Supports all 195 UN countries. Static JSON data for top 50 agricultural
+// nations; AI (Gemini/LLaMA) generates state & district lists for the rest.
+
 async function loadCountries() {
+  const sel = $('country');
+  sel.innerHTML = '<option value="">⏳ Loading countries...</option>';
   try {
     const res  = await fetch('/api/countries');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const sel  = $('country');
-    sel.innerHTML = '<option value="">🌍 Select Country...</option>';
-    (data.countries || []).forEach(c => {
+    const countries = data.countries || [];
+    sel.innerHTML = '<option value="">🌍 Select Country (' + countries.length + ' countries)...</option>';
+    countries.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c.code;                          // just the code
-      opt.dataset.name = c.name;                   // name in data attr
-      opt.textContent = `${getCountryFlag(c.code)} ${c.name}`;
+      opt.value            = c.code;
+      opt.dataset.name     = c.name;
+      opt.textContent      = getCountryFlag(c.code) + ' ' + c.name;
       sel.appendChild(opt);
     });
   } catch (e) {
     console.error('Failed to load countries:', e);
-    $('country').innerHTML = '<option value="">Error loading countries</option>';
+    sel.innerHTML = '<option value="">⚠ Error loading countries</option>';
   }
 }
 
@@ -93,30 +98,42 @@ async function onCountryChange() {
   const selectedOpt = sel.options[sel.selectedIndex];
   STATE.countryCode = code;
   STATE.countryName = selectedOpt ? selectedOpt.dataset.name : '';
+  const isStatic = selectedOpt && selectedOpt.dataset.hasStatic === '1';
 
   // Reset downstream
   const stateSel = $('state'), distSel = $('district');
-  stateSel.innerHTML = '<option value="">Loading states...</option>';
-  stateSel.disabled = true;
-  distSel.innerHTML  = '<option value="">Select state first...</option>';
-  distSel.disabled   = true;
+  distSel.innerHTML = '<option value="">Select state first...</option>';
+  distSel.disabled  = true;
   STATE.stateCode = STATE.stateName = STATE.district = '';
+  STATE.lat = null; STATE.lon = null;
+
+  // Show AI spinner for states
+  stateSel.innerHTML = '<option value="">🤖 AI generating states for ' + STATE.countryName + '...</option>';
+  stateSel.disabled = true;
+
+  // Remove any previous AI badge
+  const oldBadge = document.getElementById('aiStateBadge');
+  if (oldBadge) oldBadge.remove();
 
   try {
-    const res  = await fetch(`/api/states/${code}`);
+    const res  = await fetch('/api/states/' + code);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    stateSel.innerHTML = '<option value="">🗺️ Select State...</option>';
+    stateSel.innerHTML = '<option value="">🗺️ Select State/Province...</option>';
     (data.states || []).forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s.code;
-      opt.dataset.name = s.name;
-      opt.textContent = s.name;
+      opt.value          = s.code;
+      opt.dataset.name   = s.name;
+      opt.dataset.lat    = s.lat || '';
+      opt.dataset.lon    = s.lon || '';
+      opt.dataset.source = s.source || 'llm';
+      opt.textContent    = s.name;
       stateSel.appendChild(opt);
     });
     stateSel.disabled = false;
   } catch (e) {
-    stateSel.innerHTML = '<option value="">No states data</option>';
+    stateSel.innerHTML = '<option value="">⚠ No states data</option>';
+    stateSel.disabled = false;
   }
 }
 
@@ -127,17 +144,24 @@ async function onStateChange() {
   const selectedOpt = sel.options[sel.selectedIndex];
   STATE.stateCode = code;
   STATE.stateName = selectedOpt ? (selectedOpt.dataset.name || code) : code;
+  const isStatic = selectedOpt && selectedOpt.dataset.source === 'static';
 
   const distSel = $('district');
-  distSel.innerHTML = '<option value="">Loading districts...</option>';
-  distSel.disabled  = true;
   STATE.district = '';
   STATE.lat = null;
   STATE.lon = null;
 
-  const url = `/api/districts/${STATE.countryCode}/${code}`;
-  console.log('[Districts] fetching:', url);
+  if (isStatic) {
+    distSel.innerHTML = '<option value="">⏳ Loading districts...</option>';
+  } else {
+    distSel.innerHTML = '<option value="">🤖 AI generating districts for ' + STATE.stateName + '...</option>';
+  }
+  distSel.disabled = true;
 
+  const oldBadge = document.getElementById('aiDistrictBadge');
+  if (oldBadge) oldBadge.remove();
+
+  const url = '/api/districts/' + STATE.countryCode + '/' + code;
   try {
     const res = await fetch(url);
     if (!res.ok) {
@@ -145,14 +169,15 @@ async function onStateChange() {
       throw new Error('HTTP ' + res.status + ' — ' + (err.detail || 'error'));
     }
     const data = await res.json();
-    console.log('[Districts] got', data.districts?.length, 'districts');
+    const source = data.source || 'static';
     distSel.innerHTML = '<option value="">📍 Select District/Region...</option>';
     (data.districts || []).forEach(d => {
       const opt = document.createElement('option');
-      opt.value       = d.name;
-      opt.dataset.lat = d.lat;
-      opt.dataset.lon = d.lon;
-      opt.textContent = d.name;
+      opt.value          = d.name;
+      opt.dataset.lat    = d.lat || '';
+      opt.dataset.lon    = d.lon || '';
+      opt.dataset.source = d.source || 'static';
+      opt.textContent    = d.name;
       distSel.appendChild(opt);
     });
     distSel.disabled = false;
@@ -396,6 +421,15 @@ function renderDashboard(data) {
 
   // Chat context
   updateChatContext(loc, gathered);
+
+  // Climate Intelligence Panel
+  const climSig = gathered.climate_signal;
+  if (climSig && climSig.enso_phase) {
+    renderClimatePanel(climSig);
+  } else {
+    // Fetch asynchronously in the background
+    fetchAndRenderClimate(loc.country_name, loc.state_name, loc.district, gathered.climate_zone);
+  }
 
   // Show dashboard
   const dash = $('dashboard');
@@ -658,6 +692,216 @@ function renderCrops(crops) {
       if (fill) fill.style.width = score + '%';
     }, 200 + i * 80);
   });
+}
+
+// ── CLIMATE INTELLIGENCE PANEL ────────────────────────────────────────────
+async function fetchAndRenderClimate(country, state, district, climateZone) {
+  try {
+    const params = new URLSearchParams({
+      country:      country || 'india',
+      state:        state   || '',
+      district:     district|| '',
+      climate_zone: climateZone || 'Subtropical',
+    });
+    const res = await fetch('/climate-signals?' + params.toString());
+    if (!res.ok) return;
+    const data = await res.json();
+    const sig  = data.climate_signals;
+    if (sig) renderClimatePanel(sig);
+  } catch (e) {
+    console.warn('[Climate] fetch failed:', e);
+  }
+}
+
+function renderClimatePanel(sig) {
+  const section = $('climate-section');
+  if (!section) return;
+
+  const phase    = sig.enso_phase    || 'Neutral';
+  const strength = sig.enso_strength || 'Neutral';
+  const oni      = sig.oni_value;
+  const label    = sig.phase_label   || phase;
+  const interp   = sig.ai_interpretation || {};
+  const adj      = sig.forecast_adjustments || {};
+  const threats  = sig.threats || {};
+
+  // ── ENSO banner ──────────────────────────────────────────────────────────
+  let phaseClass, phaseIcon;
+  if (phase === 'El Nino')            { phaseClass = 'enso-el-nino';       phaseIcon = '🔴'; }
+  else if (phase === 'El Nino Watch') { phaseClass = 'enso-el-nino-watch'; phaseIcon = '🟠'; }
+  else if (phase === 'La Nina')       { phaseClass = 'enso-la-nina';       phaseIcon = '🔵'; }
+  else if (phase === 'La Nina Watch') { phaseClass = 'enso-la-nina-watch'; phaseIcon = '🟣'; }
+  else                                { phaseClass = 'enso-neutral';       phaseIcon = '🟢'; }
+
+  const banner = $('ensoBanner');
+  if (banner) banner.className = 'enso-banner ' + phaseClass;
+  const el = $('ensoIcon');      if (el) el.textContent = phaseIcon;
+  const pt = $('ensoPhaseText'); if (pt) pt.textContent = label;
+  const oni_el = $('ensoOni');
+  if (oni_el && oni !== undefined) {
+    oni_el.textContent = 'ONI: ' + (oni >= 0 ? '+' : '') + oni.toFixed(2) + '°C';
+  }
+
+  // ── Alert bar ──────────────────────────────────────────────────────────────
+  const alertEl    = $('climateAlert');
+  const alertTxt   = $('climateAlertText');
+  const alertLevel = interp.alert_level || 'None';
+
+  if (alertEl && alertLevel !== 'None') {
+    // Count active threats
+    const activeThreatNames = [];
+    if (interp.heat_stress_risk && interp.heat_stress_risk !== 'None') activeThreatNames.push('Heat Stress');
+    if (interp.drought_risk && interp.drought_risk !== 'None') activeThreatNames.push('Drought');
+    if (interp.frost_risk && interp.frost_risk !== 'None') activeThreatNames.push('Frost');
+    if (interp.flood_risk && interp.flood_risk !== 'None' && interp.flood_risk !== 'Low') activeThreatNames.push('Flood');
+    if (interp.cyclone_risk && interp.cyclone_risk !== 'None' && interp.cyclone_risk !== 'Low') activeThreatNames.push('Cyclone/Storm');
+    if (interp.wildfire_risk && interp.wildfire_risk !== 'None') activeThreatNames.push('Wildfire');
+    if (phase !== 'Neutral') activeThreatNames.push(label);
+
+    const threatsStr = activeThreatNames.length > 0
+      ? activeThreatNames.join(' · ')
+      : 'Multiple climate factors active';
+
+    alertTxt.textContent = `${alertLevel} — Active threats: ${threatsStr}. Review risks and actions below.`;
+    alertEl.classList.remove('hidden');
+    if (alertLevel === 'Warning' || alertLevel === 'Emergency') {
+      alertEl.style.background  = 'rgba(220,38,38,0.10)';
+      alertEl.style.borderColor = 'rgba(220,38,38,0.35)';
+      alertEl.style.color       = '#b91c1c';
+    } else if (alertLevel === 'Watch') {
+      alertEl.style.background  = 'rgba(234,88,12,0.10)';
+      alertEl.style.borderColor = 'rgba(234,88,12,0.35)';
+      alertEl.style.color       = '#c2410c';
+    } else {
+      alertEl.removeAttribute('style');
+    }
+  } else if (alertEl) {
+    alertEl.classList.add('hidden');
+    alertEl.removeAttribute('style');
+  }
+
+  // ── AI Summary ────────────────────────────────────────────────────────────
+  const sumEl = $('climateSummary');
+  if (sumEl) sumEl.textContent = interp.summary || `Climate conditions at your location: ENSO is ${phase}. Monitor local weather advisories.`;
+
+  // ── 7 Threat Tiles ────────────────────────────────────────────────────────
+  function riskColor(level) {
+    const l = (level || 'None').toLowerCase();
+    if (l === 'none')                           return '#22c55e'; // green
+    if (l === 'low' || l === 'advisory')        return '#84cc16'; // lime
+    if (l === 'moderate' || l === 'near-frost') return '#f59e0b'; // amber
+    if (l === 'severe' || l === 'high' || l === 'watch') return '#f97316'; // orange
+    if (l === 'extreme' || l === 'warning' || l === 'emergency' || l === 'frost') return '#ef4444'; // red
+    return '#6b7280'; // grey default
+  }
+
+  function setTile(tileId, valueId, level) {
+    const tile = $(tileId);
+    const valEl = $(valueId);
+    if (!tile || !valEl) return;
+    const display = level || 'None';
+    valEl.textContent = display;
+    const col = riskColor(display);
+    tile.style.borderColor = col + '88';
+    tile.style.background  = col + '18';
+    valEl.style.color      = col;
+    valEl.style.fontWeight = '700';
+  }
+
+  setTile('tileHeat',     'heatRisk',     interp.heat_stress_risk);
+  setTile('tileDrought',  'droughtRisk',  interp.drought_risk);
+  setTile('tileFrost',    'frostRisk',    interp.frost_risk);
+  setTile('tileFlood',    'floodRisk',    interp.flood_risk);
+  setTile('tileCyclone',  'cycloneRisk',  interp.cyclone_risk);
+  setTile('tileWildfire', 'wildfireRisk', interp.wildfire_risk);
+
+  // ENSO impact tile
+  const ensoTile = $('tileEnso');
+  const ensoImpactEl = $('ensoImpact');
+  if (ensoTile && ensoImpactEl) {
+    const ensoRisk = phase === 'Neutral' ? 'None' : (strength === 'Strong' ? 'Severe' : strength === 'Moderate' ? 'Moderate' : 'Low');
+    ensoImpactEl.textContent = phase === 'Neutral' ? 'Neutral' : strength;
+    const col = riskColor(ensoRisk);
+    ensoTile.style.borderColor = col + '88';
+    ensoTile.style.background  = col + '18';
+    ensoImpactEl.style.color   = col;
+    ensoImpactEl.style.fontWeight = '700';
+    if (ensoImpactEl) {
+      const ensoImpactLine = $('ensoImpact');
+      if (ensoImpactLine && interp.enso_impact) {
+        ensoTile.title = interp.enso_impact;
+      }
+    }
+  }
+
+  // ── Outlook values ────────────────────────────────────────────────────────
+  const rfOutlook = interp.rainfall_outlook || 'Near Normal';
+  const tpOutlook = interp.temp_outlook     || 'Near Normal';
+  const rfEl = $('rainfallOutlook');
+  const tpEl = $('tempOutlook');
+  const adjEl = $('forecastAdj');
+
+  function outlookClass(val) {
+    if (val === 'Below Normal') return 'below-normal';
+    if (val === 'Above Normal') return 'above-normal';
+    return 'near-normal';
+  }
+  if (rfEl) { rfEl.textContent = rfOutlook; rfEl.className = 'impact-value ' + outlookClass(rfOutlook); }
+  if (tpEl) { tpEl.textContent = tpOutlook; tpEl.className = 'impact-value ' + outlookClass(tpOutlook); }
+  if (adjEl) adjEl.textContent = adj.description || 'No adjustment';
+
+  // ── Climate change trend ──────────────────────────────────────────────────
+  const trendDiv = $('climateTrend');
+  const trendTxt = $('climateTrendText');
+  if (trendTxt && interp.climate_change_trend) {
+    trendTxt.textContent = interp.climate_change_trend;
+    if (trendDiv) trendDiv.style.display = '';
+  }
+
+  // ── Crop Risks ────────────────────────────────────────────────────────────
+  const risks = interp.crop_risks || [];
+  const risksDiv = $('climateRisks');
+  const risksList = $('risksList');
+  if (risksList && risks.length) {
+    risksList.innerHTML = risks.map(r => `<li>${r}</li>`).join('');
+    if (risksDiv) risksDiv.style.display = '';
+  }
+
+  // ── Immediate Actions ─────────────────────────────────────────────────────
+  const actions = interp.immediate_actions || [];
+  const actionsDiv = $('climateActions');
+  const actionsList = $('actionsList');
+  if (actionsList && actions.length) {
+    actionsList.innerHTML = actions.map(a => `<li>${a}</li>`).join('');
+    if (actionsDiv) actionsDiv.style.display = '';
+  }
+
+  // ── Seasonal Outlook ──────────────────────────────────────────────────────
+  const outlookDiv = $('climateOutlook');
+  const outlookTxt = $('outlookText');
+  if (outlookTxt && interp.seasonal_outlook) {
+    outlookTxt.textContent = interp.seasonal_outlook;
+    if (outlookDiv) outlookDiv.style.display = '';
+  }
+
+  // ── Opportunity ───────────────────────────────────────────────────────────
+  const opp = interp.opportunity || '';
+  const oppDiv = $('climateOpportunity');
+  const oppTxt = $('oppText');
+  if (oppTxt && opp) {
+    oppTxt.textContent = opp;
+    if (oppDiv) oppDiv.style.display = '';
+  }
+
+  // ── Footer timestamp ──────────────────────────────────────────────────────
+  const tsEl = $('climateFetchedAt');
+  if (tsEl && sig.fetched_at) {
+    const dt = new Date(sig.fetched_at);
+    tsEl.textContent = 'Updated: ' + dt.toLocaleTimeString();
+  }
+
+  // Show the panel
+  section.style.display = '';
 }
 
 // ── CHAT ───────────────────────────────────────────────────────────────────

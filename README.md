@@ -1,4 +1,4 @@
-# 🌾 AI Powered Weather Resilient Crop Advisor v3.0
+# 🌾 AI Powered Weather Resilient Crop Advisor v3.1
 
 <div align="center">
 
@@ -6,12 +6,13 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=for-the-badge&logo=fastapi)
 ![LLaMA](https://img.shields.io/badge/LLaMA-3.2%20Local-8A2BE2?style=for-the-badge)
 ![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-black?style=for-the-badge)
+![NOAA](https://img.shields.io/badge/NOAA-Climate%20Signals-0057B7?style=for-the-badge)
 ![HTML5](https://img.shields.io/badge/HTML5-Vanilla_JS-E34F26?style=for-the-badge&logo=html5)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**An AI Powered Weather Resilient Crop Advisor v3.0 powered by LLaMA and Web Search Agents — covering 50+ countries, 250+ states, and 170+ districts natively.**
+**An AI-Powered Weather-Resilient Crop Advisor v3.1 powered by LLaMA & Web Search Agents — covering 50+ countries, 250+ states, and 170+ districts, now with real-time ENSO / El Niño / La Niña climate intelligence.**
 
-[Overview](#-overview) • [Agent Architecture](#-agent-architecture) • [Features](#-features) • [Installation](#-installation) • [API Endpoints](#-api-endpoints)
+[Overview](#-overview) • [Agent Architecture](#-agent-architecture) • [Climate Intelligence](#-climate-signal-intelligence-v31-new) • [Features](#-features) • [Installation](#-installation) • [API Endpoints](#-api-endpoints)
 
 </div>
 
@@ -19,65 +20,126 @@
 
 ## 🧭 Overview
 
-The **AI Powered Weather Resilient Crop Advisor** is an end-to-end, global agricultural intelligence platform. By combining live weather data, machine learning-blended climate forecasts, and large language model (LLM) reasoning, the system replicates the advice of a skilled agronomist for virtually any farming region in the world.
+The **AI Powered Weather Resilient Crop Advisor** is an end-to-end, global agricultural intelligence platform. By combining live weather data, machine-learning-blended climate forecasts, real-time ENSO signals, and large language model (LLM) reasoning, the system replicates the advice of a skilled agronomist for virtually any farming region in the world.
 
-A user selects their country, state, and district, and the **Data Gathering Agent** instantly pulls real-time weather from Open-Meteo, cross-references it against historical climate zones, and uses a local LLaMA model (via Ollama) to enrich the soil data and local market prices. Finally, the **Crop Agent** ranks over 50 crops and streams a personalized, context-aware analysis directly to the UI.
+A user selects their country, state, and district. The **Data Gathering Agent** instantly pulls:
+1. Real-time weather from Open-Meteo
+2. Historical climate-zone forecasts anchored to live temperature
+3. **Current global ENSO status from NOAA CPC** (El Niño / La Niña / Neutral — free, no key)
+4. Soil data and local market prices from the LLM
 
-The platform relies on **LLaMA 3.2 (via Ollama)** running entirely locally for free and private inference, with Google Gemini acting as an automatic cloud fallback.
+Finally, the **Crop Agent** ranks over 50 crops and streams a personalized, climate-aware analysis to the UI.
+
+The platform relies on **LLaMA 3.2 (via Ollama)** running entirely locally, with Google Gemini as an automatic cloud fallback.
 
 ---
 
 ## 💡 Project Idea
 
-Most crop advisory tools rely on generic, static lookup tables or expensive IoT sensors. This platform takes a radically different approach by acting as an **AI Powered Weather Resilient Crop Advisor v3.0**. It combines **publicly available free data sources** with **Machine Learning** and **LLM Agents** to replicate the advice a skilled agronomist would give, dynamically, anywhere in the world.
+Most crop advisory tools rely on generic, static lookup tables or expensive IoT sensors. This platform takes a radically different approach by acting as an **AI-powered climate-aware agronomist**. It combines **publicly available free data sources** with **Machine Learning**, **LLM Agents**, and **real-time ENSO climate signals** to replicate expert advice dynamically, anywhere in the world.
 
 ### Core Design Principles
 
 | Principle | Implementation |
 |-----------|----------------|
 | **Global Precision** | Location Agent dynamically maps 170+ global districts. Open-Meteo fetches real-time, exact lat/lon weather. |
-| **Agentic Workflow** | Multi-agent system (Location, Data, Crop) orchestrates intelligence gathering behind a single `/api/analyze/stream` call. |
-| **Graceful Degradation** | Remove LLM → rule-based scoring continues. Remove Internet → uses static climate zone modeling. Zero single points of failure. |
-| **Free & Private LLM** | LLaMA 3.2 runs locally via Ollama — no API costs, no data sent to cloud, no quota limits. |
+| **Climate Intelligence** | NOAA CPC ONI data (free) reveals El Niño/La Niña phase; AI agent interprets the impact for the farmer's location. |
+| **Agentic Workflow** | Multi-agent system (Location, Data, Crop, Climate) orchestrates intelligence gathering behind a single `/api/analyze/stream` call. |
+| **Graceful Degradation** | Remove LLM → rule-based scoring continues. Remove Internet → zone-based modeling. Remove NOAA → Neutral phase assumed. Zero single points of failure. |
+| **Free & Private** | LLaMA 3.2 runs locally via Ollama. NOAA data is public. Open-Meteo requires no API key. |
 
 ---
 
 ## 🤖 Agent Architecture
 
-The system utilizes a multi-agent backend to orchestrate the intelligence gathering and analysis process:
-
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      PRESENTATION LAYER                             │
 │       Web Browser ←→ index.html + app.js + style.css               │
-│       Dynamic Streaming UI · Chart.js Visualizations                │
+│  Streaming Dashboard · Climate Intelligence Panel · Farmer Chat     │
 └──────────────────────────────┬──────────────────────────────────────┘
-                               │  HTTP / REST / Streaming (FastAPI)
+                               │  HTTP / REST / SSE Streaming (FastAPI)
 ┌──────────────────────────────▼──────────────────────────────────────┐
 │                        API LAYER                                     │
 │  GET /api/countries · GET /api/states · GET /api/districts          │
 │  POST /api/analyze/stream · POST /chat · GET /weather/now           │
-└──┬───────────────────────────┬───────────────────────────┬──────────┘
-   │                           │                           │
-┌──▼──────────────────┐ ┌──────▼──────────────────┐ ┌──────▼──────────┐
-│ Location Agent      │ │ Data Gathering Agent    │ │ Crop Agent      │
-│ (world_locations.json)│ │ (Weather + Climatology +│ │ (Ranking Engine │
-│ 50+ Countries       │ │ LLM Soil/Market Enrich) │ │ + Streaming LLM)│
-└──┬──────────────────┘ └──────┬──────────────────┘ └──────┬──────────┘
-   │                           │                           │
-┌──▼───────────────────────────▼───────────────────────────▼──────────┐
-│                           LLM LAYER                                 │
-│  Primary:  LLaMA 3.2 via Ollama (local, free, private)             │
-│  Fallback: Google Gemini (if Ollama not running)                    │
-│  Uses: Soil Enrichment, Market Prices, Crop Ranking, Farmer Chat    │
-└──┬──────────────────────────────────────────────────────────────────┘
+│  GET /climate-signals  ← NEW                                        │
+└──┬───────────────────────────┬──────────────────┬───────────────────┘
+   │                           │                  │
+┌──▼──────────────────┐ ┌──────▼──────────┐ ┌────▼────────────────────┐
+│ Location Agent      │ │ Data Gathering  │ │ Climate Signal Service  │
+│ world_locations.json│ │ Agent           │ │ (climate_signals.py)    │
+│ 50+ Countries       │ │ Weather + Zone  │ │ NOAA ONI → ENSO Phase   │
+│                     │ │ + ENSO Adjust   │ │ + AI Location Impact    │
+└──┬──────────────────┘ └──────┬──────────┘ └─────────────────────────┘
+   │                           │
+┌──▼───────────────────────────▼────────────────────────────┐
+│                       LLM LAYER                            │
+│  Primary:  LLaMA 3.2 via Ollama (local, free, private)    │
+│  Fallback: Google Gemini (if Ollama not running)          │
+│  Uses: Soil, Market Prices, Crop Ranking, Chat, ENSO      │
+└──┬────────────────────────────────────────────────────────┘
    │
 ┌──▼──────────────────────────────────────────────────────────────────┐
 │                         DATA LAYER                                   │
 │  Crop DB (50+ crops) · World Locations · Zone Climate Normals       │
-│  Open-Meteo Live API (Free, No Key)                                 │
+│  Open-Meteo Live API (Free) · NOAA CPC ONI (Free)                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🌐 Climate Signal Intelligence (v3.1 — NEW)
+
+Version 3.1 adds a full **Climate Signal Intelligence** layer. The system automatically fetches the current global ENSO state from NOAA CPC every 6 hours and applies research-based adjustments to the 6-month forecast and crop recommendations.
+
+### How It Works (No API Key Required)
+
+```text
+NOAA CPC (Free)
+  └── ONI text file → Current Oceanic Niño Index value
+        │
+        ▼
+  Phase Detection
+  El Niño (ONI ≥ +0.5) | La Niña (ONI ≤ −0.5) | Neutral
+        │
+        ▼
+  Research-Based Forecast Adjustment (per climate zone)
+  India El Niño → rainfall ×0.80, temp +0.5°C
+  India La Niña → rainfall ×1.20, temp −0.3°C
+        │
+        ▼
+  Gemini/LLaMA Interpretation
+  → Plain-language impact summary for the farmer's location
+  → Crop risks list, seasonal opportunity, alert level
+        │
+        ▼
+  6-Month Forecast (ENSO-adjusted)
+  + Climate Intelligence Panel in dashboard UI
+```
+
+### ENSO Impact Reference
+
+| ENSO Phase | India / South Asia | Impact on Crops |
+|------------|-------------------|-----------------|
+| 🔴 **El Niño** | Weaker SW monsoon, below-normal rainfall, +0.5°C warmer | Drought stress risk for Kharif crops; favour drought-tolerant varieties |
+| 🔵 **La Niña** | Stronger SW monsoon, above-normal rainfall, −0.3°C cooler | Flood/waterlogging risk; fungal disease pressure rises |
+| 🟢 **Neutral** | Near-normal conditions | Standard seasonal recommendations apply |
+
+### New `/climate-signals` Endpoint
+
+```http
+GET /climate-signals?country=india&state=Maharashtra&district=Pune&climate_zone=Subtropical
+```
+
+Returns:
+- `enso_phase` — El Nino / La Nina / Neutral
+- `oni_value` — Oceanic Niño Index (°C)
+- `phase_label` — Human-readable label with strength
+- `forecast_adjustments` — `rainfall_factor` and `temp_offset_c` applied to forecast
+- `ai_interpretation` — AI-generated summary, crop risks, opportunity, alert level
+
+*Data: NOAA CPC (free, no API key). Interpretation: existing Gemini/LLaMA agent.*
 
 ---
 
@@ -91,31 +153,40 @@ Farmer Input (Country → State → District + Planning Horizon)
         Resolves the district's exact latitude and longitude using world_locations.json.
         │
         ▼
-[2] Data Gathering Agent (Weather)
-        Fetches live real-time weather from Open-Meteo (temp_max, temp_min, rainfall, wind, UV).
+[2] Data Gathering Agent — Live Weather
+        Fetches real-time weather from Open-Meteo (temp, rainfall, wind, UV).
         │
         ▼
-[3] Data Gathering Agent (Climate & Season)
-        Maps the district to a global climate zone (e.g. Mediterranean, Tropical).
-        Builds a 6-month historical forecast anchored to the live temperature.
+[3] Data Gathering Agent — Climatology Forecast
+        Builds a 6-month forecast from historical climate zone data,
+        anchored to the live temperature for district-level accuracy.
         │
         ▼
-[4] Data Gathering Agent (LLM Enrichment)
-        Invokes Gemini/LLaMA to dynamically assess typical soil profiles and market prices
-        for the specified region. Falls back to zone defaults if LLM is down.
+[4] Climate Signal Intelligence (NEW)
+        Fetches NOAA ENSO/ONI index (free). Applies research-based rainfall &
+        temperature adjustments to the 6-month forecast. AI generates a plain-
+        language impact summary for the farmer's specific location.
         │
         ▼
-[5] Crop Agent (Scoring Engine)
-        Evaluates 50+ crops using a 6-factor suitability score (Temp, Water, Soil, Regional, Season, Drought).
-        Optionally blends with a Random Forest ML model (0.6 ML + 0.4 Rule-based).
+[5] Data Gathering Agent — LLM Enrichment
+        Invokes Gemini/LLaMA to assess soil profiles and market prices.
+        Falls back to zone defaults if LLM is down.
         │
         ▼
-[6] Risk & Pest Assessment
-        Flags drought risk, temperature stress, and current pest warnings based on live weather.
+[6] Crop Agent — Scoring Engine
+        Evaluates 50+ crops using a 6-factor suitability score (Temp, Water,
+        Soil, Regional, Season, Drought). Optionally blends with a Random Forest
+        ML model (0.6 ML + 0.4 Rule-based).
         │
         ▼
-[7] Streaming Response
-        Streams the final ranked recommendations and a generated summary to the UI token-by-token.
+[7] Risk & Pest Assessment
+        Flags drought risk, temperature stress, and pest warnings based on live
+        weather and ENSO-adjusted forecasts.
+        │
+        ▼
+[8] Streaming Response
+        Streams the final ranked recommendations and a generated summary to the
+        UI in real time via Server-Sent Events.
 ```
 
 ---
@@ -124,9 +195,10 @@ Farmer Input (Country → State → District + Planning Horizon)
 
 | LLM Component | File | Purpose |
 |---------------|------|---------|
-| **Soil & Market Enrichment** | `data_gathering_agent.py` | Dynamically assesses local soil types and market crop prices for global regions. |
+| **Soil & Market Enrichment** | `data_gathering_agent.py` | Dynamically assesses local soil types and market prices. |
+| **ENSO Interpretation** | `climate_signals.py` | Translates global ENSO phase into a location-specific farming impact. |
 | **Streaming Explainer** | `crop_agent.py` | Generates a real-time summary of why specific crops were recommended. |
-| **Farmer Chat** | `llm_chat.py` | Context-aware Q&A bot that remembers live weather and region specifics. |
+| **Farmer Chat** | `llm_chat.py` | Context-aware Q&A bot remembering live weather, ENSO, and region specifics. |
 
 **Provider Priority Chain:**
 1. **LLaMA 3.2 via Ollama** (Local, free, private) ← *Default*
@@ -152,12 +224,12 @@ Farmer Input (Country → State → District + Planning Horizon)
 
 | Factor | Weight | How it's computed |
 |--------|--------|-------------------|
-| **Temperature Compatibility** | 25% | Optimal range (100) → linear decay to survival limits (60) → gentle 8°C grace margin decay (20) → beyond limits (0). |
-| **Water Availability** | 25% | Expected rainfall + irrigation vs. crop water requirement. |
+| **Temperature Compatibility** | 25% | Optimal range (100) → linear decay to survival limits (60) → 8°C grace margin (20) → beyond limits (0). |
+| **Water Availability** | 25% | Expected rainfall + irrigation vs. crop water requirement. **ENSO-adjusted in v3.1.** |
 | **Soil Compatibility** | 15% | Texture, pH, drainage, and organic matter matching. |
 | **Regional Suitability** | 15% | District-specific suitability modifiers. |
 | **Seasonal Adjustment** | 10% | Whether the crop is traditionally planted in the detected season. |
-| **Drought Tolerance Bonus** | 10% | Score boost for drought-resistant crops during expected dry spells. |
+| **Drought Tolerance Bonus** | 10% | Score boost for drought-resistant crops during expected dry spells (elevated in El Niño). |
 
 *(Note: If the Random Forest model is trained and available, the final score becomes a 60:40 blend of ML prediction and this rule-based engine).*
 
@@ -167,19 +239,27 @@ Farmer Input (Country → State → District + Planning Horizon)
 
 ### 🌍 Global Location Support
 - Supports **50+ countries**, **250+ states/provinces**, and **170+ districts**.
-- Includes accurate fallback mechanisms to state capitals or regional centers if a specific district is missing.
+- Includes accurate fallback mechanisms to state capitals or regional centers.
+
+### 🌐 Climate Signal Intelligence (v3.1 New)
+- Real-time **El Niño / La Niña** status from NOAA CPC (free, no API key).
+- 6-month forecast **automatically adjusted** based on ENSO phase and climate zone.
+- AI agent generates a **plain-language impact summary** with crop risks and opportunities.
+- **Climate Intelligence Panel** in the dashboard shows phase badge, alert level, rainfall/temp outlook, and AI-generated advice.
 
 ### 🧠 Graceful AI Degradation
-- **Tier 1 (Default)**: Ollama runs a local LLaMA model for 100% free, private, offline intelligence.
-- **Tier 2 (Fallback)**: If Ollama isn't running, it seamlessly falls back to Google Gemini (requires an API key in `.env`).
-- **Tier 3 (Safe Mode)**: If no LLM is available, the system uses static rule-based scoring and fallback climate profiles to ensure the farmer still gets a recommendation.
+- **Tier 1**: Ollama runs LLaMA 3.2 locally — free, private, offline.
+- **Tier 2**: Seamlessly falls back to Google Gemini if Ollama isn't running.
+- **Tier 3**: Static rule-based scoring if no LLM is available.
+- **ENSO Tier**: Falls back to Neutral (no adjustment) if NOAA is unreachable.
 
 ### 🌡️ Real-Time & Forecasted Weather
 - Live Open-Meteo integration for accurate today-weather.
-- 6-Month forward-looking climate modeling using dynamic zone anchoring (ensuring high-altitude regions get accurate cooler temperatures compared to their broad geographic zone).
+- 6-Month forward-looking climate modeling with ENSO adjustment layer.
 
 ### 💬 Interactive Streaming Chat
-- Real-time token streaming gives a modern, "ChatGPT-like" experience for both the main crop analysis and the interactive Farmer Chat.
+- Real-time token streaming for both the main crop analysis and the Farmer Chat.
+- Chat is aware of live weather, ENSO phase, and current crop recommendations.
 
 ---
 
@@ -188,12 +268,13 @@ Farmer Input (Country → State → District + Planning Horizon)
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | Python 3.8+, FastAPI, Uvicorn |
-| **Frontend** | HTML5, Vanilla CSS3, JavaScript, Chart.js |
+| **Frontend** | HTML5, Vanilla CSS3, JavaScript |
 | **Machine Learning** | Scikit-learn (Random Forest Suitability Model) |
 | **Agent Framework** | Custom Python Agents |
 | **Primary LLM** | **LLaMA 3.2** via **Ollama** (local, free, private) |
 | **Fallback LLM** | Google Gemini (`gemini-2.0-flash-lite`) |
-| **Live Weather** | Open-Meteo API (Free, no API key required) |
+| **Live Weather** | Open-Meteo API (Free, no key) |
+| **Climate Signals** | NOAA CPC ONI (Free, no key) — **NEW in v3.1** |
 
 ---
 
@@ -205,7 +286,7 @@ Farmer Input (Country → State → District + Planning Horizon)
 | **RAM** | 4 GB | 8 GB |
 | **Storage** | 600 MB | 3 GB (to hold the LLaMA model) |
 | **Ollama Model** | `gemma3:2b` (Lighter) | `llama3.2` |
-| **Internet** | Required for live weather | Stable broadband |
+| **Internet** | Required for live weather & NOAA | Stable broadband |
 
 ---
 
@@ -216,10 +297,12 @@ Farmer Input (Country → State → District + Planning Horizon)
 - [Ollama](https://ollama.com/download) *(recommended — free local LLM)*
 - A free **[Google Gemini API key](https://aistudio.google.com/app/apikey)** *(optional — used as fallback)*
 
+> **NOAA Climate Data requires no API key** — it is fetched automatically.
+
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/tirthch25/Indian-Farmer-Crop-Recommendation-System.git
-cd Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
+git clone https://github.com/tirthch25/AI-Powered-Weather-Resilient-Crop-Advisor.git
+cd AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
 ```
 
 ### 2. Create a Virtual Environment
@@ -255,10 +338,11 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 # Optional fallback
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# NOAA climate data — no key needed, fetched automatically
 ```
 
 ### 6. Start the Platform
-You can use the bundled setup script, or run the web server directly:
 ```bash
 # Windows
 .\setup.bat
@@ -271,7 +355,8 @@ python run_website.py
 ```
 http://localhost:8000          ← Web Interface
 http://localhost:8000/docs     ← Interactive Swagger API Docs
-http://localhost:8000/health   ← System status (LLM provider, agents)
+http://localhost:8000/health   ← System status
+http://localhost:8000/climate-signals?country=india  ← ENSO Status (new)
 ```
 
 ---
@@ -281,13 +366,15 @@ http://localhost:8000/health   ← System status (LLM provider, agents)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/countries` | List of supported countries |
-| `GET` | `/api/states/{country}` | List of states/provinces for a given country |
-| `GET` | `/api/districts/{country}/{state}` | List of districts/cities |
+| `GET` | `/api/states/{country}` | States/provinces for a given country |
+| `GET` | `/api/districts/{country}/{state}` | Districts/cities |
 | `POST` | `/api/analyze/stream` | **Streaming** crop recommendation via LLM Agent |
+| `GET` | `/climate-signals` | **NEW** — Current ENSO status + AI location impact |
 | `POST` | `/chat` | Interactive Farmer Q&A Chat |
+| `POST` | `/chat/stream` | Streaming Farmer Chat (SSE) |
 | `GET` | `/weather/now/{region_id}` | Live real-time temperature from Open-Meteo |
 | `POST` | `/recommend` | Legacy full-batch JSON recommendation engine |
-| `GET` | `/health` | API health, ML model status, and active LLM provider |
+| `GET` | `/health` | API health, ML status, and active LLM provider |
 
 ---
 
@@ -300,14 +387,20 @@ agri_crop_recommendation/
 ├── scripts/                    # Utility scripts (training, scraping)
 ├── src/
 │   ├── agents/                 # LLaMA Agents (Location, Data Gathering, Crop)
+│   │   └── data_gathering_agent.py  # Now includes ENSO adjustment step
 │   ├── api/                    # FastAPI endpoints (app.py, models.py)
 │   ├── crops/                  # Crop database and soil definitions
 │   ├── ml/                     # ML pipelines and predictors
-│   ├── services/               # Recommender, risk, pests, calendar
+│   ├── services/
+│   │   ├── recommender.py      # Score blending engine
+│   │   └── climate_signals.py  # NEW — NOAA ENSO fetch + AI interpretation
 │   ├── utils/                  # Region manager, seasons
 │   └── weather/                # Weather fetcher, historical climatology
 ├── static/                     # CSS, JS, Images
-├── templates/                  # HTML templates (index.html)
+│   ├── css/style.css           # Includes Climate Intelligence Panel styles
+│   └── js/app.js               # Includes renderClimatePanel() function
+├── templates/
+│   └── index.html              # Dashboard with Climate Intelligence Panel
 ├── .env.example                # Example environment variables
 ├── requirements.txt            # Python dependencies
 └── run_website.py              # Server startup script
@@ -317,12 +410,12 @@ agri_crop_recommendation/
 
 ## 🙏 Acknowledgements
 
-This project was made possible by several incredible open-source projects and data providers:
-- **[Open-Meteo](https://open-meteo.com/)** for providing a fantastic, free, and robust weather API.
-- **[Ollama](https://ollama.com/)** for making local LLM inference effortless.
-- **[Meta LLaMA](https://llama.meta.com/)** for their powerful open-weights LLaMA 3.2 model.
-- **[FastAPI](https://fastapi.tiangolo.com/)** for the high-performance Python web framework.
-- **[Google Gemini](https://deepmind.google/technologies/gemini/)** for their lightning-fast cloud LLM API used as our fallback engine.
+- **[Open-Meteo](https://open-meteo.com/)** — Free, robust weather API (no key required).
+- **[NOAA CPC](https://www.cpc.ncep.noaa.gov/)** — Free Oceanic Niño Index (ONI) data for ENSO monitoring.
+- **[Ollama](https://ollama.com/)** — Local LLM inference made effortless.
+- **[Meta LLaMA](https://llama.meta.com/)** — Open-weights LLaMA 3.2 model.
+- **[FastAPI](https://fastapi.tiangolo.com/)** — High-performance Python web framework.
+- **[Google Gemini](https://deepmind.google/technologies/gemini/)** — Cloud LLM fallback engine.
 
 ---
 
@@ -333,6 +426,6 @@ MIT License — see the [LICENSE](LICENSE) file for details.
 ---
 
 <div align="center">
-  <strong>Global Agricultural Intelligence</strong><br/>
-  <em>Empowering agriculture through AI, Agents, and Real-Time Data</em>
+  <strong>Global Agricultural Intelligence · v3.1</strong><br/>
+  <em>Empowering agriculture through AI Agents, Real-Time Data, and Climate Science</em>
 </div>

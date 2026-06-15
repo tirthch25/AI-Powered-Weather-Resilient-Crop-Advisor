@@ -224,4 +224,4 @@ Response: SSE stream of LLM tokens acting as an Agronomist.
 
 ---
 *End of User Module Paper — AI Powered Weather Resilient Crop Advisor v3.0*  
-*Prepared by Tirth Chankeshwara | CDAC-Pune | June 2026*
+*Prepared by Tirth Chankeshwara | HPC Group | CDAC-Pune | June 2026*

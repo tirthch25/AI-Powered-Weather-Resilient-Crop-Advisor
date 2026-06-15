@@ -661,7 +661,6 @@ def get_current_weather(region_id: str):
         # Row 14 = today (14 past days included by Open-Meteo, index 14 = today)
         today_idx = min(14, len(wx) - 1)
         today = wx.iloc[today_idx]
-
         t_max  = round(float(today["temp_max"]), 1)
         t_min  = round(float(today["temp_min"]), 1)
         t_avg  = round(float(today.get("temp_avg", (today["temp_max"] + today["temp_min"]) / 2)), 1)
@@ -696,6 +695,50 @@ def get_current_weather(region_id: str):
     except Exception as e:
         logger.error("[/weather/now endpoint error]\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Weather fetch error: {str(e)}")
+
+
+# ----------- Climate Signals Endpoint (ENSO / El Niño / La Niña) -----------
+
+@app.get("/climate-signals")
+def get_climate_signals_endpoint(
+    country: str = "india",
+    state: str = "",
+    district: str = "",
+    climate_zone: str = "Subtropical",
+):
+    """
+    Fetch current global climate signals (El Niño / La Niña / ENSO status)
+    from NOAA CPC — completely free, no API key required.
+
+    The existing Gemini/LLaMA agent interprets the signal and produces a
+    plain-language impact summary for the farmer's specific location.
+
+    Results are cached for 6 hours (ENSO updates monthly).
+    """
+    try:
+        from src.services.climate_signals import get_climate_signals
+        location_str = ", ".join(p for p in [district, state, country] if p)
+        signals = get_climate_signals(
+            location_str=location_str or country,
+            climate_zone=climate_zone,
+            country=country,
+        )
+        return {
+            "climate_signals": signals,
+            "location": {
+                "country": country,
+                "state": state,
+                "district": district,
+                "climate_zone": climate_zone,
+            },
+            "note": (
+                "Data sourced from NOAA CPC (free, no API key). "
+                "Interpretation by AI agent (Gemini/LLaMA)."
+            ),
+        }
+    except Exception as e:
+        logger.error("[/climate-signals error]\n" + traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Climate signals error: {str(e)}")
 
 
 # ----------- LLM Chat Endpoint -----------
@@ -739,7 +782,7 @@ def farmer_chat(request: ChatRequest):
                     default_soil = robj.get_default_soil() if hasattr(robj, 'get_default_soil') else None
                     if default_soil:
                         soil_info = f"{default_soil.texture}, pH {default_soil.ph}, {default_soil.organic_matter} organic matter"
-                    # Live weather summary — use TODAY's row (index 14 = current day after 14 past days)
+                    # Live weather summary
                     try:
                         from src.weather.fetcher import fetch_weather
                         from src.ml.pipeline import add_agri_features
@@ -747,7 +790,6 @@ def farmer_chat(request: ChatRequest):
                                            region_id=robj.region_id,
                                            season=request.season or "")
                         wx = add_agri_features(wx)
-                        # Row 14 is today (14 past days + today)
                         today_idx = min(14, len(wx) - 1)
                         today = wx.iloc[today_idx]
                         t_max  = round(float(today['temp_max']), 1)
@@ -767,8 +809,7 @@ def farmer_chat(request: ChatRequest):
             except Exception:
                 region_name = request.region_id or ""
 
-        # Populate weather cache so the streaming endpoint (and next chat turn)
-        # can reuse it without re-fetching live data
+        # Populate weather cache
         if weather_summary and set_weather_cache and request.region_id:
             set_weather_cache(request.region_id.upper(), weather_summary)
 
@@ -806,7 +847,7 @@ def farmer_chat_stream(request: StreamChatRequest):
 
     Yields text chunks as they arrive, giving instant perceived response.
     Region context (name, state, soil, climate zone) is resolved from fast
-    in-memory lookups only. Weather is used only if already cached — we never
+    in-memory lookups only. Weather is used only if already cached - we never
     block on a live weather API call here, keeping first-token latency low.
     The final SSE event is 'data: [DONE]{json-encoded-history}'.
     """
@@ -815,6 +856,8 @@ def farmer_chat_stream(request: StreamChatRequest):
             yield "data: AI chat is unavailable. Start Ollama (ollama serve) or add GEMINI_API_KEY to .env.\n\n"
             yield "data: [DONE][]\n\n"
         return StreamingResponse(_no_llm(), media_type="text/event-stream")
+
+
 
     # --- Fast in-memory context resolution (no I/O) ---
     region_name = state_name = climate_zone = soil_info = weather_summary = ""
@@ -888,76 +931,94 @@ def farmer_chat_stream(request: StreamChatRequest):
 
 
 # ===============================================================================
-# Global Agent Endpoints -- LLaMA + Ollama Web Search
+# Global Agent Endpoints -- All 195 Countries + LLM-powered location resolution
 # ===============================================================================
 
 @app.get("/api/countries")
 def api_get_countries():
-    """Return all supported countries for the global location selector."""
+    """Return all 195 UN-recognised countries for the global location selector."""
     if not _AGENTS_AVAILABLE:
         raise HTTPException(status_code=503, detail="Location agent not available")
-    return {"countries": get_countries()}
+    countries = get_countries()
+    return {
+        "countries": countries,
+        "total": len(countries),
+        "note": "All 195 UN countries supported. All states and districts are AI-generated dynamically.",
+    }
 
 
 @app.get("/api/states/{country_code}")
 def api_get_states(country_code: str):
-    """Return states/provinces for a given country code."""
+    """Return ALL states/provinces for a country. 100% LLM-generated."""
     if not _AGENTS_AVAILABLE:
         raise HTTPException(status_code=503, detail="Location agent not available")
     states = get_states(country_code.upper())
-    return {"states": states}
+    source = states[0].get("source", "llm") if states else "llm"
+    return {
+        "states": states,
+        "source": source,
+        "note": "AI-generated state list — all official administrative divisions included.",
+    }
 
 
 @app.get("/api/districts/{country_code}/{state_code}")
 def api_get_districts(country_code: str, state_code: str):
-    """Return districts for a given country and state code."""
+    """Return ALL districts/regions for a country+state. 100% LLM-generated."""
     if not _AGENTS_AVAILABLE:
         raise HTTPException(status_code=503, detail="Location agent not available")
     districts = get_districts(country_code.upper(), state_code.upper())
-    return {"districts": districts}
+    source = districts[0].get("source", "llm") if districts else "llm"
+    return {
+        "districts": districts,
+        "source": source,
+        "note": "AI-generated district list — all administrative sub-regions included.",
+    }
 
 
 @app.post("/api/analyze")
 def api_analyze(request: AnalyzeRequest):
-    """
-    Main global analysis endpoint.
+    """Main global analysis endpoint (non-streaming).
 
-    1. Resolves coordinates for the district
-    2. Runs LLaMA agent with Ollama web search to gather real data
-    3. Runs crop recommendation agent
-    4. Returns dashboard data: current weather, 6-month forecast, crops, market prices
+    Uses resolve_full() to get coordinates AND climate_zone/crop_notes via LLM
+    for any of the 195 supported countries.
     """
     if not _AGENTS_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Agent system not available. Check OLLAMA_API_KEY in .env.")
+        raise HTTPException(status_code=503, detail="Agent system not available.")
 
     try:
-        # Resolve coordinates
         lat = request.lat
         lon = request.lon
+        loc_info = {}
         if lat is None or lon is None:
-            lat, lon = resolve_coordinates(request.country_code, request.state_code, request.district)
+            try:
+                from src.agents.location_agent import resolve_full
+                loc_info = resolve_full(request.country_code, request.state_code, request.district)
+                lat = loc_info.get("lat", 20.0)
+                lon = loc_info.get("lon", 78.0)
+            except Exception:
+                lat, lon = resolve_coordinates(request.country_code, request.state_code, request.district)
 
-        # Step 1: Data gathering agent — real weather + climatology + LLM enrichment
         gathered = gather_location_data(
             country=request.country_name,
             state=request.state_name,
             district=request.district,
             lat=lat,
             lon=lon,
-            state_code=request.state_code,  # passed for India zone mapping
+            state_code=request.state_code,
+            llm_climate_zone=loc_info.get("climate_zone"),
+            llm_crop_notes=loc_info.get("crop_notes"),
+            location_source=loc_info.get("source", "llm"),
         )
 
-        # Step 2: Soil override if user provided
         soil_override = None
         if request.soil_texture:
             soil_override = {
-                "type":          request.soil_texture,
-                "ph":            request.soil_ph or 7.0,
-                "organic_matter":request.soil_organic or "Medium",
-                "drainage":      request.soil_drainage or "Medium",
+                "type":           request.soil_texture,
+                "ph":             request.soil_ph or 7.0,
+                "organic_matter": request.soil_organic or "Medium",
+                "drainage":       request.soil_drainage or "Medium",
             }
 
-        # Step 3: Crop recommendation agent
         crops = recommend_crops_agent(
             country=request.country_name,
             state=request.state_name,
@@ -968,39 +1029,40 @@ def api_analyze(request: AnalyzeRequest):
             soil_override=soil_override,
         )
 
-        # Step 4: Update LLM chat weather cache so chatbot knows live conditions
         if set_weather_cache and _LLM_CHAT_AVAILABLE and gathered.get("current"):
             cur = gathered["current"]
             summary = (
-                f"Current conditions in {request.district}, {request.state_name}: "
-                f"{cur.get('temperature_c','?')} C, "
-                f"humidity {cur.get('humidity_pct','?')}%, "
-                f"rainfall last 7 days: {cur.get('rainfall_7d_mm','?')} mm"
+                "Current conditions in " + request.district + ", " + request.state_name + ": "
+                + str(cur.get("temperature_c", "?")) + "C, "
+                + "humidity " + str(cur.get("humidity_pct", "?")) + "%, "
+                + "rainfall last 7 days: " + str(cur.get("rainfall_7d_mm", "?")) + " mm"
             )
-            cache_key = f"{request.country_code}_{request.state_code}_{request.district}".upper()
+            cache_key = (request.country_code + "_" + request.state_code + "_" + request.district).upper()
             set_weather_cache(cache_key, summary)
 
         return {
             "location": {
-                "country_code": request.country_code,
-                "country_name": request.country_name,
-                "state_code":   request.state_code,
-                "state_name":   request.state_name,
-                "district":     request.district,
-                "lat": lat,
-                "lon": lon,
+                "country_code":    request.country_code,
+                "country_name":    request.country_name,
+                "state_code":      request.state_code,
+                "state_name":      request.state_name,
+                "district":        request.district,
+                "lat":             lat,
+                "lon":             lon,
+                "location_source": gathered.get("location_source", "llm"),
             },
-            "gathered_data": gathered,
+            "gathered_data":     gathered,
             "recommended_crops": crops,
-            "agent": "llama3.2 + ollama_web_search",
-            "version": "3.0",
+            "agent":             "llama3.2 + gemini",
+            "version":           "3.1",
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[/api/analyze error]\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+        logger.error("[/api/analyze error]\n" + traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Analysis error: " + str(e))
+
 
 # -- SSE Streaming Analyze Endpoint -------------------------------------------
 # Emits real-time progress. Weather + LLM enrichment run IN PARALLEL for speed.
