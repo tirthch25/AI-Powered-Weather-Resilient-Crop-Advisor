@@ -91,45 +91,92 @@ def _extract_json(text: str) -> Optional[list]:
 
 
 # Country-specific crop hint lists — shown to LLM as few-shot context
-# so it understands what crops are actually grown in each region
+# so it understands what crops are actually grown in each region.
+# Keys MUST be lowercase — matching is done via substring search.
 _COUNTRY_CROP_HINTS: Dict[str, str] = {
-    # Europe
-    "germany":       "Winterweizen (Winter Wheat), Winterraps (Canola/Rapeseed), Zuckerrübe (Sugar Beet), Mais (Maize/Corn), Kartoffel (Potato), Wintergerste (Winter Barley), Roggen (Rye), Triticale, Hafer (Oat), Ackerbohne (Field Bean), Sonnenblume (Sunflower), Rüben (Turnips)",
-    "france":        "Blé tendre (Soft Wheat), Colza (Canola), Maïs (Maize), Orge (Barley), Betterave sucrière (Sugar Beet), Tournesol (Sunflower), Pomme de terre (Potato), Pois protéagineux (Protein Pea), Soja, Vin (Grapevine), Lin oléagineux (Linseed)",
-    "united kingdom":"Winter Wheat, Oilseed Rape (Canola), Spring Barley, Winter Barley, Potatoes, Sugar Beet, Oats, Field Beans, Winter Oats, Linseed, Peas",
-    "poland":        "Żyto (Rye), Pszenica (Wheat), Rzepak (Canola), Ziemniaki (Potato), Buraki cukrowe (Sugar Beet), Kukurydza (Maize), Owies (Oat), Groch (Pea), Słonecznik (Sunflower)",
-    "ukraine":       "Пшениця (Wheat), Соняшник (Sunflower), Кукурудза (Maize), Соя (Soybean), Ріпак (Canola), Ячмінь (Barley), Буряк цукровий (Sugar Beet), Просо (Millet)",
-    "netherlands":   "Aardappel (Potato), Suikerbiet (Sugar Beet), Tarwe (Wheat), Gerst (Barley), Ui (Onion), Bloembollen (Flower bulbs), Koolzaad (Canola)",
-    "italy":         "Grano tenero (Wheat), Mais (Maize), Pomodoro (Tomato), Olive (Olive), Uva (Grape), Riso (Rice), Girasole (Sunflower), Soja (Soybean)",
-    "spain":         "Trigo (Wheat), Cebada (Barley), Oliva (Olive), Vid (Grape/Vine), Girasol (Sunflower), Maíz (Maize), Naranja (Orange), Almendro (Almond)",
-    "czech":         "Pšenice (Wheat), Ječmen (Barley), Řepka (Canola), Kukuřice (Maize), Cukrová řepa (Sugar Beet), Slunečnice (Sunflower), Brambory (Potato)",
-    "romania":       "Grâu (Wheat), Porumb (Maize), Floarea-soarelui (Sunflower), Rapița (Canola), Soia (Soybean), Cartofi (Potato), Sfeclă de zahăr (Sugar Beet)",
-    "sweden":        "Höstvete (Winter Wheat), Korn (Barley), Havre (Oat), Höstraps (Winter Canola), Potatis (Potato), Sockerbetor (Sugar Beet), Råg (Rye)",
-    "denmark":       "Vinterbyg (Winter Barley), Vinterhvede (Winter Wheat), Vinterraps (Winter Canola), Havre (Oat), Kartofler (Potato), Sukkerroer (Sugar Beet)",
-    # North America
-    "united states": "Corn, Soybean, Winter Wheat, Cotton, Rice, Canola, Sorghum, Sunflower, Alfalfa, Sugarbeet",
-    "canada":        "Spring Wheat, Canola, Barley, Corn, Soybean, Oats, Flaxseed, Durum Wheat, Peas, Lentils",
-    # South America
-    "brazil":        "Soja (Soybean), Milho (Maize), Cana-de-açúcar (Sugarcane), Café (Coffee), Arroz (Rice), Algodão (Cotton), Feijão (Bean), Mandioca (Cassava), Laranja (Orange)",
-    "argentina":     "Soja (Soybean), Maíz (Maize), Trigo (Wheat), Girasol (Sunflower), Cebada (Barley), Algodón (Cotton), Caña de azúcar (Sugarcane)",
-    # Asia
-    "japan":         "Kome (Rice), Mugi (Wheat/Barley), Daizu (Soybean), Satsumaimo (Sweet Potato), Jagaimo (Potato), Natane (Canola), Tendō (Sugar Beet), Nira, Kyabeji (Cabbage)",
-    "south korea":   "Sssal (Rice), Baechu (Cabbage), Gochutgaru (Pepper), Baekkimchi (Radish), Ginseng, Maize, Barley, Garlic",
-    "china":         "Xiǎomài (Wheat), Shuǐdào (Rice), Yùmǐ (Maize), Dàdòu (Soybean), Miánhuā (Cotton), Táng liú (Sugarcane), Huāshēng (Peanut), Yóucài (Canola)",
-    "thailand":      "Khao (Rice), Mân samphalang (Cassava), Sugarcane, Maize, Rubber, Oil Palm, Mango, Durian",
-    "vietnam":       "Lúa (Rice), Cà phê (Coffee), Cao su (Rubber), Mía (Sugarcane), Cacao, Ngô (Maize), Rau (Vegetables)",
-    "indonesia":     "Padi (Rice), Kelapa sawit (Oil Palm), Karet (Rubber), Jagung (Maize), Singkong (Cassava), Tebu (Sugarcane), Kopi (Coffee)",
-    # South Asia
-    "india":         "Chawal/Dhan (Rice), Gehun (Wheat), Makka (Maize), Chana (Chickpea), Sarson (Mustard), Kapas (Cotton), Mungfali (Groundnut), Tur (Pigeon Pea), Soybean, Ganna (Sugarcane)",
-    "pakistan":      "Gandum (Wheat), Chawal (Rice), Kapas (Cotton), Aik (Sugarcane), Makkai (Maize), Sarson (Mustard), Mash (Lentil)",
-    # Africa
-    "nigeria":       "Rice, Maize, Sorghum, Cassava, Yam, Cowpea, Groundnut, Millet, Soybean, Oil Palm, Cotton",
-    "ethiopia":      "Teff, Wheat, Maize, Sorghum, Barley, Coffee, Chickpea, Lentil, Enset, Sesame",
-    "kenya":         "Maize, Tea, Coffee, Wheat, Rice, Sugarcane, Sorghum, Pyrethrum, French Beans, Horticulture",
-    "south africa":  "Maize, Wheat, Sunflower, Sugarcane, Soybean, Sorghum, Groundnut, Cotton, Barley, Tobacco",
-    # Oceania
-    "australia":     "Wheat, Barley, Canola, Sorghum, Cotton, Rice, Sugarcane, Oats, Lentil, Chickpea, Wool sheep",
-    "new zealand":   "Wheat, Barley, Ryegrass, Kiwifruit, Apple, Grapes, Sweetcorn, Onion, Potato, Dairy pasture",
+    # ── WESTERN EUROPE ────────────────────────────────────────────────────────
+    "germany":        "Winterweizen (Winter Wheat), Winterraps (Canola/Rapeseed), Zuckerrübe (Sugar Beet), Mais (Maize), Kartoffel (Potato), Wintergerste (Winter Barley), Roggen (Rye), Triticale, Hafer (Oat), Ackerbohne (Field Bean), Sonnenblume (Sunflower)",
+    "france":         "Blé tendre (Soft Wheat), Colza (Canola), Maïs (Maize), Orge (Barley), Betterave sucrière (Sugar Beet), Tournesol (Sunflower), Pomme de terre (Potato), Pois protéagineux (Protein Pea), Soja, Vin (Grapevine), Lin oléagineux (Linseed)",
+    "united kingdom": "Winter Wheat, Oilseed Rape (Canola), Spring Barley, Winter Barley, Potatoes, Sugar Beet, Oats, Field Beans, Linseed, Peas",
+    "netherlands":    "Aardappel (Potato), Suikerbiet (Sugar Beet), Tarwe (Wheat), Gerst (Barley), Ui (Onion), Koolzaad (Canola), Tulpenbollen (Tulip bulbs), Prei (Leek)",
+    "belgium":        "Tarwe (Wheat), Suikerbiet (Sugar Beet), Aardappel (Potato), Gerst (Barley), Koolzaad (Canola), Prei (Leek), Cichorei (Chicory)",
+    "switzerland":    "Winterweizen (Winter Wheat), Zuckerrübe (Sugar Beet), Kartoffel (Potato), Gerste (Barley), Raps (Canola), Körnermais (Grain Maize), Apfel (Apple), Wein (Grapevine)",
+    "austria":        "Winterweizen (Winter Wheat), Mais (Maize), Zuckerrübe (Sugar Beet), Wintergerste (Winter Barley), Kartoffel (Potato), Winterraps (Winter Canola), Hafer (Oat), Rüben (Turnips)",
+    "portugal":       "Trigo (Wheat), Milho (Maize), Arroz (Rice), Cevada (Barley), Girassol (Sunflower), Tomate (Tomato), Azeite (Olive oil), Vinho (Grape/Wine), Cortiça (Cork Oak)",
+    "spain":          "Trigo (Wheat), Cebada (Barley), Oliva (Olive), Vid (Grape/Vine), Girasol (Sunflower), Maíz (Maize), Naranja (Orange), Almendro (Almond), Arroz (Rice), Remolacha azucarera (Sugar Beet)",
+    "italy":          "Grano tenero (Wheat), Mais (Maize), Pomodoro (Tomato), Olivo (Olive), Uva (Grape), Riso (Rice), Girasole (Sunflower), Soia (Soybean), Barbabietola da zucchero (Sugar Beet)",
+    "greece":         "Σιτάρι (Wheat), Βαμβάκι (Cotton), Ελιά (Olive), Αμπέλι (Grape), Βερίκοκο (Apricot), Ρύζι (Rice), Κριθάρι (Barley), Καλαμπόκι (Maize), Τομάτα (Tomato)",
+    # ── NORTHERN EUROPE ───────────────────────────────────────────────────────
+    "sweden":         "Höstvete (Winter Wheat), Korn (Barley), Havre (Oat), Höstraps (Winter Canola), Potatis (Potato), Sockerbetor (Sugar Beet), Råg (Rye), Ärta (Pea)",
+    "denmark":        "Vinterbyg (Winter Barley), Vinterhvede (Winter Wheat), Vinterraps (Winter Canola), Havre (Oat), Kartofler (Potato), Sukkerroer (Sugar Beet), Rug (Rye)",
+    "finland":        "Ohra (Barley), Kaura (Oat), Vehnä (Wheat), Rypsi (Turnip Rape), Peruna (Potato), Sokerijuurikas (Sugar Beet), Herne (Pea)",
+    "norway":         "Bygg (Barley), Havre (Oat), Hvete (Wheat), Raps (Canola), Potet (Potato), Gulrot (Carrot), Kål (Cabbage)",
+    # ── CENTRAL/EASTERN EUROPE ────────────────────────────────────────────────
+    "poland":         "Pszenica (Wheat), Żyto (Rye), Rzepak (Canola), Ziemniaki (Potato), Buraki cukrowe (Sugar Beet), Kukurydza (Maize), Owies (Oat), Groch (Pea), Słonecznik (Sunflower)",
+    "czech":          "Pšenice (Wheat), Ječmen (Barley), Řepka (Canola), Kukuřice (Maize), Cukrová řepa (Sugar Beet), Slunečnice (Sunflower), Brambory (Potato), Oves (Oat)",
+    "slovakia":       "Pšenica (Wheat), Jačmeň (Barley), Repka (Canola), Kukurica (Maize), Cukrová repa (Sugar Beet), Slnečnica (Sunflower), Zemiaky (Potato)",
+    "hungary":        "Búza (Wheat), Kukorica (Maize), Napraforgó (Sunflower), Repce (Canola), Cukorrépa (Sugar Beet), Burgonya (Potato), Árpa (Barley), Szójabab (Soybean)",
+    "romania":        "Grâu (Wheat), Porumb (Maize), Floarea-soarelui (Sunflower), Rapița (Canola), Soia (Soybean), Cartofi (Potato), Sfeclă de zahăr (Sugar Beet), Orz (Barley)",
+    "bulgaria":       "Пшеница (Wheat), Слънчоглед (Sunflower), Царевица (Maize), Рапица (Canola), Ечемик (Barley), Захарно цвекло (Sugar Beet), Картофи (Potato)",
+    "serbia":         "Pšenica (Wheat), Kukuruz (Maize), Suncokret (Sunflower), Soja (Soybean), Šećerna repa (Sugar Beet), Ječam (Barley), Krompir (Potato)",
+    "ukraine":        "Пшениця (Wheat), Соняшник (Sunflower), Кукурудза (Maize), Соя (Soybean), Ріпак (Canola), Ячмінь (Barley), Буряк цукровий (Sugar Beet), Жито (Rye)",
+    # ── RUSSIA / CENTRAL ASIA ─────────────────────────────────────────────────
+    "russia":         "Пшеница (Wheat), Ячмень (Barley), Кукуруза (Maize), Подсолнечник (Sunflower), Рапс (Canola), Сахарная свёкла (Sugar Beet), Соя (Soybean), Рожь (Rye), Овёс (Oat)",
+    "kazakhstan":     "Пшеница (Wheat), Ячмень (Barley), Хлопок (Cotton), Подсолнечник (Sunflower), Рапс (Canola), Рис (Rice), Кукуруза (Maize), Сахарная свёкла (Sugar Beet)",
+    # ── NORTH AMERICA ────────────────────────────────────────────────────────
+    "united states":  "Corn, Soybean, Winter Wheat, Cotton, Rice, Canola, Sorghum, Sunflower, Alfalfa, Sugar Beet, Peanuts, Tobacco",
+    "canada":         "Spring Wheat, Canola, Barley, Corn, Soybean, Oats, Flaxseed, Durum Wheat, Peas, Lentils, Mustard",
+    "mexico":         "Maíz (Maize), Sorgo (Sorghum), Trigo (Wheat), Caña de azúcar (Sugarcane), Frijol (Bean), Chile (Chili Pepper), Jitomate (Tomato), Aguacate (Avocado), Alfalfa",
+    "cuba":           "Caña de azúcar (Sugarcane), Arroz (Rice), Tabaco (Tobacco), Maíz (Maize), Boniato (Sweet Potato), Yuca (Cassava), Plátano (Plantain), Café (Coffee)",
+    # ── CENTRAL / SOUTH AMERICA ───────────────────────────────────────────────
+    "brazil":         "Soja (Soybean), Milho (Maize), Cana-de-açúcar (Sugarcane), Café (Coffee), Arroz (Rice), Algodão (Cotton), Feijão (Bean), Mandioca (Cassava), Laranja (Orange), Eucalipto",
+    "argentina":      "Soja (Soybean), Maíz (Maize), Trigo (Wheat), Girasol (Sunflower), Cebada (Barley), Algodón (Cotton), Caña de azúcar (Sugarcane), Pera (Pear), Manzana (Apple)",
+    "colombia":       "Café (Coffee), Caña de azúcar (Sugarcane), Maíz (Maize), Plátano (Plantain), Yuca (Cassava), Arroz (Rice), Papa (Potato), Flores (Cut Flowers), Cacao",
+    "peru":           "Papa (Potato), Maíz (Maize), Caña de azúcar (Sugarcane), Arroz (Rice), Café (Coffee), Espárrago (Asparagus), Uva (Grape), Quinua (Quinoa), Cacao",
+    "chile":          "Trigo (Wheat), Maíz (Maize), Uva (Grape/Vine), Manzana (Apple), Arándano (Blueberry), Cereza (Cherry), Remolacha (Sugar Beet), Raps (Canola), Papa (Potato)",
+    "ecuador":        "Cacao, Banano (Banana), Caña de azúcar (Sugarcane), Maíz (Maize), Arroz (Rice), Papa (Potato), Café (Coffee), Flores (Cut Flowers), Palma africana (Oil Palm)",
+    "bolivia":        "Soja (Soybean), Maíz (Maize), Caña de azúcar (Sugarcane), Quinua (Quinoa), Papa (Potato), Arroz (Rice), Girasol (Sunflower), Cacao",
+    # ── MIDDLE EAST / NORTH AFRICA ────────────────────────────────────────────
+    "turkey":         "Buğday (Wheat), Arpa (Barley), Mısır (Maize), Pamuk (Cotton), Şeker pancarı (Sugar Beet), Domates (Tomato), Üzüm (Grape), Fındık (Hazelnut), Zeytinyağı (Olive), Tütün (Tobacco)",
+    "egypt":          "Qamh (Wheat), Arz (Rice), Qotn (Cotton), Beet El Sukkar (Sugar Beet), Dhora (Maize), Burtuqal (Orange), Batatiss (Potato), Foul (Fava Bean), Qasab el Sukkar (Sugarcane)",
+    "iran":           "Gandum (Wheat), Jou (Barley), Choqondar (Sugar Beet), Berenj (Rice), Panbeh (Cotton), Pistachio, Saffron, Grape, Tomato, Potato",
+    "iraq":           "Qamh (Wheat), Sha'ir (Barley), Tamr (Dates), Ruzz (Rice), Shummar (Maize), Tuffah (Apple), Brtuqal (Orange), Cotton, Sunflower",
+    "saudi arabia":   "Tamr (Dates), Qamh (Wheat), Sha'ir (Barley), Alfalfa, Tomato, Cucumber, Sorghum, Millet, Potato, Onion",
+    "syria":          "Qamh (Wheat), Sha'ir (Barley), Zaytoun (Olive), Qotn (Cotton), Tamr (Dates), Beet el Sukkar (Sugar Beet), Tuffah (Apple), Zeytoon (Olive), Grape",
+    "morocco":        "Blé (Wheat), Orge (Barley), Maïs (Maize), Betterave (Sugar Beet), Agrumes (Citrus), Olive, Tomate (Tomato), Pomme de terre (Potato), Tournesol (Sunflower)",
+    "algeria":        "Blé dur (Durum Wheat), Orge (Barley), Pomme de terre (Potato), Tomate (Tomato), Datte (Dates), Olive, Vigne (Grape), Agrumes (Citrus), Figue (Fig)",
+    "afghanistan":    "Gandum (Wheat), Jo (Barley), Kishmish (Grapes/Raisins), Pomegranate, Apricot, Peanut, Cotton, Rice, Maize, Saffron",
+    # ── SOUTH ASIA ────────────────────────────────────────────────────────────
+    "india":          "Chawal/Dhan (Rice), Gehun (Wheat), Makka (Maize), Chana (Chickpea), Sarson (Mustard), Kapas (Cotton), Mungfali (Groundnut), Tur/Arhar (Pigeon Pea), Soybean, Ganna (Sugarcane)",
+    "pakistan":       "Gandum (Wheat), Chawal (Rice), Kapas (Cotton), Ganna (Sugarcane), Makkai (Maize), Sarson (Mustard), Mash (Lentil), Masoor (Red Lentil), Moong (Mung Bean)",
+    "bangladesh":     "Dhan (Rice), Gom (Wheat), Pat (Jute), Alu (Potato), Aam (Mango), Piyaj (Onion), Sarisha (Mustard), Ak (Sugarcane), Morich (Chili)",
+    "nepal":          "Dhan (Rice), Makai (Maize), Gehun (Wheat), Aalu (Potato), Ukhoo (Sugarcane), Sarson (Mustard), Chamomile, Ginger, Cardamom",
+    "sri lanka":      "Hal (Rice), Thé (Tea), Rabba Kakao (Rubber), Naaraththaa (Coconut), Dimbulaa thé (Tea), Innala (Yam), Maize, Sugarcane, Cinnamon",
+    # ── EAST / SOUTHEAST ASIA ────────────────────────────────────────────────
+    "china":          "Xiǎomài (Wheat), Shuǐdào (Rice), Yùmǐ (Maize), Dàdòu (Soybean), Miánhuā (Cotton), Gānzhe (Sugarcane), Huāshēng (Peanut), Yóucài (Canola), Shāngmǐ (Potato)",
+    "japan":          "Kome (Rice), Mugi (Wheat/Barley), Daizu (Soybean), Satsumaimo (Sweet Potato), Jagaimo (Potato), Natane (Canola), Körnerkais (Sugar Beet), Kōcha (Tea)",
+    "south korea":    "Sssal (Rice), Baechu (Cabbage/Kimchi), Gochutgaru (Chili Pepper), Mu (Radish), Insamn (Ginseng), Bori (Barley), Injong (Potato), Maize, Garlic",
+    "vietnam":        "Lúa (Rice), Cà phê (Coffee), Cao su (Rubber), Mía (Sugarcane), Cacao, Ngô (Maize), Rau (Vegetables), Điều (Cashew), Hồ tiêu (Black Pepper)",
+    "thailand":       "Khao (Rice), Mân sắn (Cassava), Ói (Sugarcane), Khao phod (Maize), Yiang phara (Rubber), Mah phrao (Coconut), Palao (Oil Palm), Mango, Durian",
+    "myanmar":        "Sein Yway (Rice), Pyauk Seik (Sesame), Kyauk Nyunt (Lentil), Myauk Chin (Sunflower), Pè (Bean), Kauk Nyunt (Maize), Ngapyawè (Cotton), Rubber",
+    "cambodia":       "Sraov (Rice), Kachaang (Cassava), Kompot Skor (Sugar Palm), Angkoh (Maize), Kh'tum (Pepper), Banana, Mango, Rubber, Cashew",
+    "laos":           "Khao (Rice), Khaophod (Maize), Cassava, Coffee, Sugarcane, Tobacco, Rubber, Banana, Sesame",
+    "malaysia":       "Padi (Rice), Kelapa Sawit (Oil Palm), Getah (Rubber), Nanas (Pineapple), Pisang (Banana), Durian, Cacao, Coconut, Pepper",
+    "indonesia":      "Padi (Rice), Kelapa sawit (Oil Palm), Karet (Rubber), Jagung (Maize), Singkong (Cassava), Tebu (Sugarcane), Kopi (Coffee), Cengkeh (Clove)",
+    "philippines":    "Palay (Rice), Mais (Maize), Niyog (Coconut), Tubo (Sugarcane), Nana (Pineapple), Saging (Banana), Kape (Coffee), Gulay (Vegetables), Kamote (Sweet Potato)",
+    # ── AFRICA ───────────────────────────────────────────────────────────────
+    "nigeria":        "Rice, Maize (Corn), Sorghum, Cassava, Yam, Cowpea, Groundnut (Peanut), Millet, Soybean, Oil Palm, Cotton, Plantain",
+    "ethiopia":       "Teff, Wheat, Maize, Sorghum, Barley, Coffee, Chickpea, Lentil, Enset (Ensete), Sesame, Faba Bean",
+    "kenya":          "Maize, Tea, Coffee, Wheat, Rice, Sugarcane, Sorghum, Pyrethrum, French Beans, Cut Flowers, Avocado, Macadamia",
+    "ghana":          "Cocoa, Cassava, Maize, Oil Palm, Groundnut (Peanut), Rice, Plantain, Tomato, Cotton, Tobacco, Coconut",
+    "tanzania":       "Maize, Rice, Cassava, Sorghum, Coffee, Tea, Cotton, Sisal, Cashew, Clove, Pyrethrum, Tobacco",
+    "uganda":         "Matoke (Banana/Plantain), Maize, Cassava, Sweet Potato, Coffee, Tea, Cotton, Sugarcane, Millet, Sorghum",
+    "zimbabwe":       "Maize, Tobacco, Cotton, Sorghum, Wheat, Groundnut, Sunflower, Soybean, Sugar Beet, Vegetables",
+    "zambia":         "Maize, Cassava, Sorghum, Cotton, Tobacco, Groundnut, Sunflower, Soybean, Wheat, Rice, Vegetables",
+    "south africa":   "Maize, Wheat, Sunflower, Sugarcane, Soybean, Sorghum, Groundnut, Cotton, Barley, Canola, Tobacco, Citrus, Grapes",
+    # ── OCEANIA ───────────────────────────────────────────────────────────────
+    "australia":      "Wheat, Barley, Canola, Sorghum, Cotton, Rice, Sugarcane, Oats, Lentil, Chickpea, Lupin, Wool/Sheep",
+    "new zealand":    "Wheat, Barley, Ryegrass, Kiwifruit, Apple, Grapes, Sweetcorn, Onion, Potato, Dairy pasture, Squash",
 }
 
 def _get_country_hints(country: str) -> str:
@@ -567,7 +614,9 @@ def _fallback_crops(season: str, climate: str, country: str = "") -> list:
         # European-specific
         if any(eu in c_lower for eu in ["germany", "france", "poland", "ukraine", "netherlands",
                                          "belgium", "czech", "austria", "hungary", "romania",
-                                         "sweden", "denmark", "finland", "norway", "switzerland"]):
+                                         "sweden", "denmark", "finland", "norway", "switzerland",
+                                         "slovakia", "hungary", "bulgaria", "serbia", "croatia",
+                                         "slovenia", "estonia", "latvia", "lithuania", "ireland"]):
             season_map = {
                 "Spring": [
                     {"crop_name": "Sugar Beet",   "local_name": "Zuckerrübe",    "suitability_score": 90, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 170, "water_need": "Medium", "estimated_yield": "50-80 tons/ha",  "planting_window": "Mar 15 - Apr 30",   "market_demand": "High",   "reasons": ["Major European cash crop", "Long growing season suits climate"], "warnings": [], "growing_tip": "Precision sow at 5-8cm depth."},
@@ -609,6 +658,66 @@ def _fallback_crops(season: str, climate: str, country: str = "") -> list:
                 season_map.get("Autumn") or
                 season_map["Winter"]
             )
+
+        # Russia / Central Asia (continental climate — similar crops to Eastern Europe)
+        if any(ru in c_lower for ru in ["russia", "kazakhstan", "uzbekistan", "kyrgyzstan", "tajikistan", "turkmenistan", "mongolia", "belarus"]):
+            return [
+                {"crop_name": "Spring Wheat",  "local_name": "Яровая пшеница",  "suitability_score": 92, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 95,  "water_need": "Low",    "estimated_yield": "2-4 tons/ha",    "planting_window": "May 1 - Jun 1",     "market_demand": "High",   "reasons": ["#1 Russian staple crop", "Short-season suited to continental climate"], "warnings": [], "growing_tip": "Use drought-tolerant spring varieties for steppe regions."},
+                {"crop_name": "Sunflower",     "local_name": "Подсолнечник",    "suitability_score": 88, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 105, "water_need": "Low",    "estimated_yield": "2-3.5 tons/ha",  "planting_window": "May 1 - Jun 1",     "market_demand": "High",   "reasons": ["Russia/Ukraine top oil crop", "Drought tolerant"], "warnings": [], "growing_tip": "Plant at 60-70cm row spacing; thin to 5-6 plants/m²."},
+                {"crop_name": "Spring Barley", "local_name": "Яровой ячмень",   "suitability_score": 85, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 80,  "water_need": "Low",    "estimated_yield": "2-4 tons/ha",    "planting_window": "May 1 - May 25",    "market_demand": "High",   "reasons": ["Beer malt and animal feed", "Early harvest for short season"], "warnings": [], "growing_tip": "Two-row malting varieties preferred by breweries."},
+                {"crop_name": "Canola",        "local_name": "Рапс",            "suitability_score": 80, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 90,  "water_need": "Medium", "estimated_yield": "1.5-3 tons/ha",  "planting_window": "May 5 - Jun 1",     "market_demand": "High",   "reasons": ["Growing Russian export crop", "Biodiesel demand"], "warnings": [], "growing_tip": "Spring canola establishment critical — plant into warm soil."},
+                {"crop_name": "Soybean",       "local_name": "Соя",             "suitability_score": 76, "season_fit": "Good",      "risk_level": "Medium", "duration_days": 100, "water_need": "Medium", "estimated_yield": "1.5-3 tons/ha",  "planting_window": "May 15 - Jun 15",   "market_demand": "High",   "reasons": ["Russian Far East staple", "Export market growing"], "warnings": ["Requires warm soil — delayed planting risk in cold years"], "growing_tip": "Choose early-maturing varieties for northern regions."},
+                {"crop_name": "Maize",         "local_name": "Кукуруза",        "suitability_score": 72, "season_fit": "Good",      "risk_level": "Medium", "duration_days": 110, "water_need": "Medium", "estimated_yield": "5-9 tons/ha",    "planting_window": "May 10 - Jun 1",    "market_demand": "High",   "reasons": ["Silage and grain markets", "Southern Russia high yield"], "warnings": ["Frost risk — plant only after last frost"], "growing_tip": "Use FAO 200-300 early hybrids for most regions."},
+            ]
+
+        # Turkey / Middle East / North Africa
+        if any(me in c_lower for me in ["turkey", "egypt", "iran", "iraq", "syria", "jordan", "lebanon",
+                                         "saudi", "morocco", "algeria", "tunisia", "libya", "israel",
+                                         "afghanistan", "azerbaijan", "georgia", "armenia"]):
+            return [
+                {"crop_name": "Wheat",          "local_name": "Buğday/Qamh",    "suitability_score": 92, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 150, "water_need": "Low",    "estimated_yield": "3-5 tons/ha",    "planting_window": "Oct - Dec",         "market_demand": "High",   "reasons": ["Primary cereal of the Middle East", "Winter rains ideal"], "warnings": [], "growing_tip": "Sow after first autumn rains for best germination."},
+                {"crop_name": "Barley",         "local_name": "Arpa/Sha'ir",    "suitability_score": 88, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 120, "water_need": "Low",    "estimated_yield": "2-4 tons/ha",    "planting_window": "Oct - Nov",         "market_demand": "High",   "reasons": ["Drought tolerant cereal", "Animal feed demand"], "warnings": [], "growing_tip": "More drought tolerant than wheat — extend into drier areas."},
+                {"crop_name": "Cotton",         "local_name": "Pamuk/Qotn",     "suitability_score": 83, "season_fit": "Good",      "risk_level": "Medium", "duration_days": 180, "water_need": "High",   "estimated_yield": "1.5-3 tons/ha",  "planting_window": "Apr - May",         "market_demand": "High",   "reasons": ["Major regional cash crop", "Hot summers ideal"], "warnings": ["Requires irrigation", "Monitor for bollworm"], "growing_tip": "Drip irrigation saves water; apply potassium at boll formation."},
+                {"crop_name": "Sugar Beet",     "local_name": "Şeker Pancarı",  "suitability_score": 80, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 180, "water_need": "Medium", "estimated_yield": "50-80 tons/ha",  "planting_window": "Mar - Apr",         "market_demand": "High",   "reasons": ["Major Turkish/Egyptian crop", "State-supported"], "warnings": [], "growing_tip": "Precision sow for optimal canopy establishment."},
+                {"crop_name": "Tomato",         "local_name": "Domates/Tamatar", "suitability_score": 85, "season_fit": "Excellent", "risk_level": "Medium", "duration_days": 90,  "water_need": "High",   "estimated_yield": "40-80 tons/ha", "planting_window": "Apr - Jun",         "market_demand": "High",   "reasons": ["Hot summers ideal", "Export and processing markets"], "warnings": ["Irrigate regularly"], "growing_tip": "Stake or cage plants; apply calcium to prevent blossom-end rot."},
+                {"crop_name": "Olive",          "local_name": "Zeytun/Zaytoun", "suitability_score": 78, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 365, "water_need": "Low",    "estimated_yield": "2-5 tons/ha",    "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Classic Mediterranean/Middle East crop", "Perennial income"], "warnings": [], "growing_tip": "Prune biennial bearing by removing alternate year crop."},
+            ]
+
+        # Southeast Asia (Malaysia, Indonesia, Philippines, Myanmar, Cambodia, Laos, Vietnam, Thailand)
+        if any(se in c_lower for se in ["malaysia", "myanmar", "cambodia", "laos", "philippines", "brunei", "timor"]):
+            return [
+                {"crop_name": "Rice",           "local_name": "Padi/Sraov",     "suitability_score": 95, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 120, "water_need": "High",   "estimated_yield": "3-5 tons/ha",    "planting_window": "Start of rains",    "market_demand": "High",   "reasons": ["Primary staple crop", "Wet tropical climate ideal"], "warnings": [], "growing_tip": "Transplant seedlings at 3-4 leaf stage into flooded fields."},
+                {"crop_name": "Oil Palm",       "local_name": "Kelapa Sawit",   "suitability_score": 90, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 365, "water_need": "High",   "estimated_yield": "20-30 tons/ha FFB","planting_window": "Year-round",        "market_demand": "High",   "reasons": ["#1 SE Asia cash crop", "Year-round harvest"], "warnings": [], "growing_tip": "Frond-stacking essential for mulch and erosion control."},
+                {"crop_name": "Cassava",        "local_name": "Ubi Kayu/Singkong","suitability_score": 85, "season_fit": "Excellent", "risk_level": "Low",   "duration_days": 270, "water_need": "Low",    "estimated_yield": "15-30 tons/ha",  "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Export starch crop", "Very drought tolerant"], "warnings": [], "growing_tip": "Plant stem cuttings at 45° angle for best rooting."},
+                {"crop_name": "Maize",          "local_name": "Jagung/Mais",    "suitability_score": 80, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 90,  "water_need": "Medium", "estimated_yield": "4-7 tons/ha",    "planting_window": "Dry season",        "market_demand": "High",   "reasons": ["Animal feed demand", "Fast growing in warm climate"], "warnings": [], "growing_tip": "Plant at start of dry season with residual moisture."},
+                {"crop_name": "Rubber",         "local_name": "Getah/Karet",    "suitability_score": 78, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 365, "water_need": "High",   "estimated_yield": "1-2 tons latex/ha","planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Major export crop", "Perennial income"], "warnings": [], "growing_tip": "Tap trees early morning for maximum latex yield."},
+                {"crop_name": "Banana",         "local_name": "Pisang/Saging",  "suitability_score": 75, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 300, "water_need": "High",   "estimated_yield": "25-40 tons/ha",  "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Export and local market", "Year-round crop"], "warnings": [], "growing_tip": "Remove suckers to leave 2-3 per stool."},
+            ]
+
+        # Mexico / Central America / Caribbean
+        if any(mx in c_lower for mx in ["mexico", "guatemala", "honduras", "cuba", "costa rica",
+                                         "nicaragua", "el salvador", "panama", "belize", "haiti",
+                                         "dominican", "jamaica", "trinidad"]):
+            return [
+                {"crop_name": "Maize",          "local_name": "Maíz",           "suitability_score": 95, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 100, "water_need": "Medium", "estimated_yield": "4-8 tons/ha",    "planting_window": "Apr - Jun",         "market_demand": "High",   "reasons": ["Origin of maize — diverse varieties", "Central to regional diet"], "warnings": [], "growing_tip": "Traditional milpa system: grow with beans and squash."},
+                {"crop_name": "Sorghum",        "local_name": "Sorgo",          "suitability_score": 88, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 100, "water_need": "Low",    "estimated_yield": "3-5 tons/ha",    "planting_window": "May - Jul",         "market_demand": "High",   "reasons": ["Drought tolerant alternative to maize", "Animal feed"], "warnings": [], "growing_tip": "Excellent on dry upland areas unsuitable for maize."},
+                {"crop_name": "Bean",           "local_name": "Frijol",         "suitability_score": 85, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 80,  "water_need": "Medium", "estimated_yield": "1-2 tons/ha",    "planting_window": "Jun - Aug",         "market_demand": "High",   "reasons": ["Dietary staple — eaten daily", "Nitrogen fixer"], "warnings": [], "growing_tip": "Inoculate seeds with Rhizobium before planting."},
+                {"crop_name": "Sugarcane",      "local_name": "Caña de azúcar", "suitability_score": 82, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 365, "water_need": "High",   "estimated_yield": "60-120 tons/ha", "planting_window": "Oct - Dec",         "market_demand": "High",   "reasons": ["Major regional cash crop", "Sugar and ethanol markets"], "warnings": [], "growing_tip": "Ratoon crop for 3-5 years to reduce establishment cost."},
+                {"crop_name": "Avocado",        "local_name": "Aguacate",       "suitability_score": 80, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 365, "water_need": "Medium", "estimated_yield": "10-20 tons/ha",  "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["High export value", "Origin of Hass avocado"], "warnings": [], "growing_tip": "Graft Hass onto Dusa rootstock for best yield and disease resistance."},
+                {"crop_name": "Chili Pepper",   "local_name": "Chile",          "suitability_score": 78, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 90,  "water_need": "Medium", "estimated_yield": "8-15 tons/ha",   "planting_window": "Mar - May",         "market_demand": "High",   "reasons": ["Central to Mexican cuisine", "Export demand growing"], "warnings": [], "growing_tip": "Transplant 6-week-old seedlings; mulch to retain moisture."},
+            ]
+
+        # South America (except Brazil/Argentina handled separately by Subtropical_S)
+        if any(sa in c_lower for sa in ["colombia", "peru", "chile", "ecuador", "bolivia",
+                                         "venezuela", "paraguay", "uruguay", "guyana", "suriname"]):
+            return [
+                {"crop_name": "Soybean",        "local_name": "Soja",           "suitability_score": 88, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 100, "water_need": "Medium", "estimated_yield": "2.5-4 tons/ha",  "planting_window": "Oct - Dec",         "market_demand": "High",   "reasons": ["Major South American export", "China demand strong"], "warnings": [], "growing_tip": "Inoculate with Bradyrhizobium japonicum for nitrogen fixation."},
+                {"crop_name": "Maize",          "local_name": "Maíz",           "suitability_score": 85, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 110, "water_need": "Medium", "estimated_yield": "4-8 tons/ha",    "planting_window": "Sep - Dec",         "market_demand": "High",   "reasons": ["Food and feed crop", "Multiple growing seasons"], "warnings": [], "growing_tip": "Use no-till in soybean-maize rotation."},
+                {"crop_name": "Coffee",         "local_name": "Café",           "suitability_score": 82, "season_fit": "Excellent", "risk_level": "Medium", "duration_days": 365, "water_need": "Medium", "estimated_yield": "0.5-3 tons/ha",  "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Premium export crop", "Highland climate ideal"], "warnings": ["Coffee leaf rust — use resistant varieties"], "growing_tip": "Shade-grown coffee commands specialty price premium."},
+                {"crop_name": "Potato",         "local_name": "Papa",           "suitability_score": 80, "season_fit": "Good",      "risk_level": "Medium", "duration_days": 100, "water_need": "Medium", "estimated_yield": "15-30 tons/ha",  "planting_window": "Year-round (highland)","market_demand": "High",  "reasons": ["Origin of the potato — over 4,000 native varieties", "Andean staple"], "warnings": ["Late blight: monitor regularly"], "growing_tip": "Native andean varieties often more blight resistant."},
+                {"crop_name": "Sugarcane",      "local_name": "Caña de azúcar", "suitability_score": 78, "season_fit": "Good",      "risk_level": "Low",    "duration_days": 365, "water_need": "High",   "estimated_yield": "60-100 tons/ha", "planting_window": "Apr - Jun",         "market_demand": "High",   "reasons": ["Sugar and ethanol market", "Tropical lowlands ideal"], "warnings": [], "growing_tip": "Ratoon 3-5 years before replanting."},
+                {"crop_name": "Banana",         "local_name": "Banano/Plátano", "suitability_score": 75, "season_fit": "Excellent", "risk_level": "Low",    "duration_days": 300, "water_need": "High",   "estimated_yield": "25-40 tons/ha",  "planting_window": "Year-round",        "market_demand": "High",   "reasons": ["Major export crop", "Year-round income"], "warnings": [], "growing_tip": "Remove excess suckers; retain only 1-2 daughter plants per stool."},
+            ]
 
         # North America
         if any(na in c_lower for na in ["united states", "canada"]):
