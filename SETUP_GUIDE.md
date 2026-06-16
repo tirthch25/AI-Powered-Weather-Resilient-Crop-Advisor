@@ -1,14 +1,14 @@
-# AI Powered Weather Resilient Crop Advisor v3.1 — Complete Setup Guide
+# AI Powered Weather Resilient Crop Advisor v4.0 — Complete Setup Guide
 
-This guide takes the project from a fresh clone to a fully running local global dashboard. It covers every component, configuration option, LLM setup, climate intelligence feature, verification steps, and all common failure modes.
+This guide takes the project from a fresh clone to a fully running local global dashboard. It covers every component, configuration option, LLM setup, data pipeline, verification steps, and all common failure modes.
 
 ---
 
 ## Table of Contents
 
-1. [What's New in v3.1](#whats-new-in-v31)
+1. [What's New in v4.0](#whats-new-in-v40)
 2. [System Requirements](#system-requirements)
-3. [Setup Map](#setup-map)
+3. [Quick Start](#quick-start)
 4. [Option A: One-Command Setup](#option-a-one-command-setup)
 5. [Option B: Manual Step-by-Step Setup](#option-b-manual-step-by-step-setup)
 6. [Environment File Reference](#environment-file-reference)
@@ -17,74 +17,99 @@ This guide takes the project from a fresh clone to a fully running local global 
 9. [Verifying All Components](#verifying-all-components)
 10. [Using the Web Application](#using-the-web-application)
 11. [API Smoke Tests](#api-smoke-tests)
-12. [Model and Data Checks](#model-and-data-checks)
-13. [Troubleshooting](#troubleshooting)
-14. [Common Commands](#common-commands)
-15. [What To Do After Setup](#what-to-do-after-setup)
+12. [Troubleshooting](#troubleshooting)
+13. [Common Commands Reference](#common-commands-reference)
 
 ---
 
-## What's New in v3.1
+## What's New in v4.0
 
-v3.1 adds two major layers on top of the v3.0 Global Dashboard:
+v4.0 is a complete **static data elimination** release. Every value shown to the farmer comes from a real API or live LLM reasoning — no hardcoded zone tables, no fallback crop lists, no templated market prices.
 
-### Climate Signal Intelligence (9 Threat Dimensions)
+### Removed Static Data
 
-| Feature | Detail |
-|---------|--------|
-| **ENSO / El Niño Detection** | Automatically fetches NOAA CPC Oceanic Niño Index (ONI) every 6 hours |
-| **No New API Key** | NOAA data is free and public — no registration |
-| **9 Threat Assessors** | ENSO, Heat Stress, Drought Index, Frost, Flood, Cyclone Basin, Wildfire, Soil Moisture, Climate Change Trend |
-| **Forecast Adjustment** | 6-month rainfall and temperature forecasts adjusted per ENSO phase and climate zone |
-| **AI Climate Summary** | Gemini Search Grounding retrieves real-time regional advisories |
-| **Climate Intelligence Panel** | New dashboard panel with threat badges, alert level, and AI advice |
-| **New API Endpoint** | `GET /climate-signals` |
+| What was removed | Why | What replaced it |
+|-----------------|-----|-----------------|
+| `_ZONE_CLIMATE` (120-cell static climate table) | Gave identical weather to all of Brazil, all of Australia, etc. | **Open-Meteo Archive API** — real 2-year monthly averages per lat/lon |
+| `_COUNTRY_TO_ZONE` (30 country→zone mappings) | Too coarse — California ≠ Florida | Gemini LLM + latitude-based fallback |
+| `_ZONE_SOIL_DEFAULTS` (static soil per climate zone) | Every tropical location got the same soil | Gemini `_llm_enrich_fast()` + search-grounded upgrade |
+| `_ZONE_MARKET_TEMPLATES` (templated market prices) | Showed fake prices with `{cur}` placeholders | Gemini Search Grounding — real prices or honest empty |
+| `_COUNTRY_CURRENCY` (30-country currency map) | Had to be manually updated | LLM returns correct local currency automatically |
+| `_COUNTRY_CROP_HINTS` (60+ country static hints) | Large static list, risked stale data | Dynamic prompt with LLM regional context |
+| `_fallback_crops()` (600+ line crop tables) | Served misleading "zombie" crops when LLM failed | `_llm_simple_fallback()` → empty list on failure |
+| Zone-based weather when Open-Meteo fails | Showed `25.0°C` for every location | `_llm_estimate_current_weather()` from coordinates |
 
-### Search-Grounded AI Agents (all three agents upgraded)
+### New Components
 
-| Component | What Changed |
+| Component | Description |
 |-----------|-------------|
-| **Crop Agent** | Now tries Gemini + Google Search first for real-time crop advisories and market prices |
-| **Data Gathering Agent** | Search Grounding for real current market prices, not generic estimates |
-| **Climate Signals** | Search Grounding for active government crop advisories and regional climate alerts |
-| **Web Search Agent** | New DuckDuckGo tool-calling agent for Ollama when Gemini is not configured |
+| **`_fetch_openmeteo_monthly_climatology()`** | Fetches 2-year real historical monthly data from Open-Meteo Archive API per lat/lon |
+| **`_llm_generate_forecast()`** | Gemini generates 6-month forecast when archive API unavailable |
+| **`_llm_estimate_current_weather()`** | Gemini estimates conditions from coordinates when live API fails |
+| **`_llm_enrich_fast()`** | Fast single Gemini call (< 8s) for soil/market in parallel with weather fetch |
+| **`/api/enrich-soil`** | Background endpoint called after render for richer search-grounded soil/market data |
+| **Background soil update** | `_bgEnrichSoil()` in JS updates the soil card smoothly after analysis completes |
+
+### Bugs Fixed
+
+| Bug | Fix |
+|-----|-----|
+| Soil card always showing `Unknown` | `llm_future.result(timeout=3)` was too short; now uses `_llm_enrich_fast` (< 8s) with `timeout=20` |
+| 7-month forecast (should be 6) | Fixed `_build_forecast_6month()` to iterate exactly 6 months |
+| `25.0°C` hardcoded in streaming path | Removed; live weather temperature used |
+| `null` values showing as `0.0°C` | `animateCount()` now shows `—` for null/undefined |
+| `feels_like_c: null` showing `Feels ?°C` | Now shows `Current` label when null |
+| ENSO step missing from streaming path | `climate_signal` now computed and included in `gathered` dict |
+| `lon` not passed to `_build_forecast_6month()` | Fixed — Archive API requires both lat and lon |
 
 ---
 
 ## System Requirements
 
-| Component | Minimum | Recommended | Why It Matters |
-|-----------|---------|-------------|----------------|
-| OS | Windows 10, macOS 11, Ubuntu 20.04 | Windows 11, macOS 13+, Ubuntu 22.04+ | Modern Python and package compatibility |
-| Python | 3.8+ | 3.10 or 3.11 | FastAPI, ML libraries, and Pydantic v2 |
-| RAM | 4 GB | 8 GB+ | Local LLM (LLaMA 3.2 uses ~3 GB) |
-| Storage | 2 GB | 6 GB+ | Python packages (~1 GB) + LLaMA model (~2 GB) |
-| Internet | Required for weather & NOAA | Stable broadband | Open-Meteo + NOAA + Gemini Search |
-| Browser | Chrome/Edge/Firefox (current) | Chrome or Edge | SSE streaming + Climate Panel |
-| Ollama / Gemini | Highly Recommended | Both configured | Full agentic experience |
+| Component | Minimum | Recommended | Notes |
+|-----------|---------|-------------|-------|
+| OS | Windows 10, macOS 11, Ubuntu 20.04 | Windows 11, macOS 13+, Ubuntu 22.04+ | Modern Python/package compatibility |
+| Python | 3.8+ | 3.10 or 3.11 | FastAPI, Pydantic v2, ML libraries |
+| RAM | 4 GB | 8 GB+ | LLaMA 3.2 uses ~3 GB |
+| Storage | 2 GB | 6 GB+ | Packages (~1 GB) + LLaMA model (~2 GB) |
+| Internet | **Required** | Stable broadband | Open-Meteo + Archive API + NOAA + Gemini |
+| Browser | Chrome/Edge/Firefox (current) | Chrome or Edge | SSE streaming, fadeIn animations |
+| Gemini API key | Strongly recommended | 2-3 keys | Soil, market prices, crop ranking |
 
-> **Note on LLMs:** v3.1 relies heavily on LLMs for crop filtering, climate interpretation, and ENSO analysis. Without any LLM, the system degrades to rule-based zone defaults.
+> **v4.0 requires internet for almost all features** — weather, archive climatology, NOAA, and LLM enrichment all hit live APIs. An offline mode is not available.
 
-> **Note on Search Grounding:** Google Search Grounding requires a Gemini API key with a model that supports it (`gemini-2.0-flash` or higher). Without it, the system falls back to static LLM knowledge.
+> **Without a Gemini key**: soil shows `🤖 Analyzing...`, market prices show "data being gathered", crop recommendations rely solely on Ollama.
 
 ---
 
-## Setup Map
+## Quick Start
 
-```text
-Install Python 3.8+
-  → Clone repository
-  → cd agri_crop_recommendation
-  → Create virtual environment (.venv)
-  → Activate virtual environment
-  → pip install -r requirements.txt
-  → Copy .env.example → .env
-  → Set LLM_PROVIDER, GEMINI_API_KEY in .env
-  → (Recommended) Install Ollama and pull llama3.2
-  → Verify: python run_website.py
-  → Open http://localhost:8000
-  → Test: curl http://localhost:8000/health
-  → Test: curl "http://localhost:8000/climate-signals?country=india"
+```bash
+# 1. Clone and enter project
+git clone https://github.com/tirthch25/AI-Powered-Weather-Resilient-Crop-Advisor.git
+cd AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
+
+# 2. Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment
+Copy-Item .env.example .env     # Windows
+# cp .env.example .env          # macOS/Linux
+# → Edit .env and add GEMINI_API_KEY=AIzaSy...
+
+# 5. (Optional but recommended) Pull Ollama model
+ollama pull llama3.2
+
+# 6. Run the server
+python run_website.py
+
+# 7. Open browser
+# http://localhost:8000
 ```
 
 ---
@@ -94,25 +119,16 @@ Install Python 3.8+
 Run from the **repository root** (not inside `agri_crop_recommendation/`).
 
 ### Windows
-
 ```powershell
 .\setup.bat
 ```
 
 ### macOS / Linux
-
 ```bash
 bash setup.sh
 ```
 
-The setup script:
-1. Checks Python version (requires 3.8+)
-2. Creates `agri_crop_recommendation/.venv`
-3. Installs all packages from `requirements.txt`
-4. Copies `.env.example` → `.env` if `.env` doesn't exist
-5. Checks if Ollama is installed and running
-6. Verifies key data files (`world_locations.json`, `crop_knowledge.json`)
-7. Optionally starts the server
+The setup script checks Python version, creates `.venv`, installs all packages, copies `.env.example` → `.env`, checks Ollama, and optionally starts the server.
 
 ---
 
@@ -162,9 +178,8 @@ Key packages installed:
 - `fastapi==0.128.7` + `uvicorn==0.40.0` — API server
 - `ollama==0.6.2` — Local LLM client
 - `google-genai==1.69.0` — Gemini AI with Search Grounding
-- `scikit-learn==1.8.0` — ML models
-- `torch==2.9.0` + `xgboost==3.2.0` — LSTM & XGBoost legacy models
-- `requests==2.32.5` — HTTP client for Open-Meteo + NOAA
+- `scikit-learn==1.8.0` + `torch==2.9.0` + `xgboost==3.2.0` — ML models (legacy)
+- `requests==2.32.5` — HTTP client for Open-Meteo, Archive API, NOAA
 - `pandas==2.3.3` + `pyarrow==22.0.0` — Data processing
 - `python-dotenv==1.2.1` — Environment variable loading
 - `jinja2==3.1.6` — HTML templating
@@ -179,7 +194,7 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and fill in your values (see [Environment File Reference](#environment-file-reference) below).
+Edit `.env` with your values (see [Environment File Reference](#environment-file-reference) below).
 
 ### Step 6: Start the Server
 
@@ -197,28 +212,28 @@ http://localhost:8000
 
 ## Environment File Reference
 
-All configuration lives in `agri_crop_recommendation/.env`. Copy from `.env.example` to get started.
+All configuration lives in `agri_crop_recommendation/.env`.
 
 ### Full Reference Table
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `LLM_PROVIDER` | Yes | `ollama` | Primary LLM: `ollama` or `gemini` |
-| `OLLAMA_MODEL` | If Ollama | `llama3.2` | Ollama model name (see options below) |
+| `OLLAMA_MODEL` | If Ollama | `llama3.2` | Ollama model name |
 | `OLLAMA_BASE_URL` | If Ollama | `http://localhost:11434` | Ollama API URL |
-| `GEMINI_API_KEY` | Recommended | _(blank)_ | Primary Gemini API key |
-| `GEMINI_API_KEY_2` | Optional | _(blank)_ | Second Gemini key (auto-rotated on 429) |
-| `GEMINI_API_KEY_3` | Optional | _(blank)_ | Third Gemini key |
-| `GEMINI_API_KEY_4` | Optional | _(blank)_ | Fourth Gemini key |
+| `GEMINI_API_KEY` | Strongly recommended | _(blank)_ | Primary Gemini key — needed for soil, market, crops |
+| `GEMINI_API_KEY_2` | Optional | _(blank)_ | Second key (auto-rotated on 429) |
+| `GEMINI_API_KEY_3` | Optional | _(blank)_ | Third key |
+| `GEMINI_API_KEY_4` | Optional | _(blank)_ | Fourth key |
 
 ### Configuration Modes
 
-| Mode | `.env` Setup | Best For |
-|------|-------------|----------|
-| **Local-first** (recommended) | `LLM_PROVIDER=ollama` | Private local inference + Gemini fallback |
-| **Cloud + Search** | `LLM_PROVIDER=ollama` + `GEMINI_API_KEY=...` | Best quality: Search Grounding for real-time data |
-| **Cloud-only** | `LLM_PROVIDER=gemini` + `GEMINI_API_KEY=...` | Machines without GPU / can't run local model |
-| **No LLM (Legacy)** | Leave keys blank, don't start Ollama | Falls back to v2.x rule-based engine |
+| Mode | `.env` Setup | Result |
+|------|-------------|--------|
+| **Best (recommended)** | `LLM_PROVIDER=ollama` + `GEMINI_API_KEY=...` | Full features: fast enrichment + search-grounded upgrades + local LLM chat |
+| **Cloud-only** | `LLM_PROVIDER=gemini` + `GEMINI_API_KEY=...` | Machines without GPU; no local model |
+| **Local-only** | `LLM_PROVIDER=ollama`, no Gemini key | Soil/market may show `Analyzing...`; crop ranking via Ollama |
+| **No LLM** | Both blank, Ollama not running | Weather and forecast work; soil/market/crops unavailable |
 
 ### Example: Recommended Setup
 
@@ -227,9 +242,9 @@ LLM_PROVIDER=ollama
 OLLAMA_MODEL=llama3.2
 OLLAMA_BASE_URL=http://localhost:11434
 
-GEMINI_API_KEY=AIzaSy...your_key_here
-GEMINI_API_KEY_2=AIzaSy...second_key   # optional, triples quota
-GEMINI_API_KEY_3=                        # leave blank if only 1 key
+GEMINI_API_KEY=AIzaSy...your_primary_key
+GEMINI_API_KEY_2=AIzaSy...second_key
+GEMINI_API_KEY_3=
 GEMINI_API_KEY_4=
 ```
 
@@ -239,12 +254,9 @@ GEMINI_API_KEY_4=
 
 ### Ollama Setup (Local LLM)
 
-Install from:
-```
-https://ollama.com/download
-```
+Install from: `https://ollama.com/download`
 
-**Windows:** Run the `.exe` installer — Ollama is added to PATH and starts as a background service automatically.
+**Windows:** Run the `.exe` installer — Ollama is added to PATH and starts automatically.
 
 **Linux:**
 ```bash
@@ -259,32 +271,21 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2      # Recommended — ~2 GB download
 ```
 
-#### Start Ollama (if not auto-started)
-
-```bash
-ollama serve
-```
-
 #### Verify Ollama is Running
 
 ```bash
-ollama list                # Shows downloaded models
-curl http://localhost:11434/api/tags   # JSON response confirms server is up
+ollama list
+curl http://localhost:11434/api/tags
 ```
 
 #### Model Options
 
 | Model | Size | Use Case |
 |-------|------|----------|
-| `llama3.2` | ~2 GB | ✅ Recommended default — fast, good reasoning |
-| `gemma3:2b` | ~1.5 GB | Lightest option for low-RAM machines |
+| `llama3.2` | ~2 GB | ✅ Recommended default |
+| `gemma3:2b` | ~1.5 GB | Lightest for low-RAM machines |
 | `llama3.1` | ~5 GB | Better reasoning, needs 8 GB+ RAM |
 | `mistral` | ~4 GB | Good multilingual performance |
-
-After changing `OLLAMA_MODEL` in `.env`, pull the new model:
-```bash
-ollama pull gemma3:2b
-```
 
 ### Gemini API Key Setup
 
@@ -295,32 +296,31 @@ ollama pull gemma3:2b
 5. Paste into `.env` as `GEMINI_API_KEY=AIzaSy...`
 
 **Free Tier Limits (as of 2025):**
-- `gemini-2.5-flash-lite` → 1,500 requests/day, 15 requests/minute per key
+- `gemini-2.0-flash-lite` → 1,500 requests/day, 15 req/min per key
 - 3 keys → effectively 4,500 requests/day free
 
-**Getting a Second Key:**  
-Repeat steps 1–4 and use a different Google project. Paste as `GEMINI_API_KEY_2`.
+> **v4.0 relies on Gemini significantly more than v3.x** — soil enrichment, market prices, and crop ranking all use Gemini calls. Having at least one key is strongly recommended.
 
 ---
 
 ## Google Search Grounding
 
-**What it does:** Allows Gemini to search the live web before answering. Enables:
-- **Real-time crop market prices** (not generic estimates)
+Search Grounding lets Gemini search the live web before answering. It enables:
+- **Real-time crop market prices** in local currency
 - **Active pest/disease alerts** for your region
 - **Current government agricultural advisories**
 - **Live climate anomaly reports**
 
 **Requirements:**
-- A Gemini API key in `.env` (`GEMINI_API_KEY`)
+- `GEMINI_API_KEY` set in `.env`
 - A model that supports it: `gemini-2.0-flash`, `gemini-2.5-flash`, or `gemini-2.0-flash-001`
 
 **Which components use it:**
-1. `crop_agent.py` — Real-time crop advisories and current prices (highest priority)
-2. `data_gathering_agent.py` — Real current market prices and soil info
-3. `climate_signals.py` — Active government crop advisories and climate alerts
+1. `crop_agent.py` — Real-time crop advisories (step 2 of crop pipeline)
+2. `/api/enrich-soil` — Background soil + market upgrade after dashboard renders
+3. `climate_signals.py` — Active government crop advisories
 
-**Fallback:** If Search Grounding is unavailable, falls through to plain Gemini → Ollama → zone defaults.
+**Fallback:** Search Grounding unavailable → plain Gemini → Ollama → empty (no static defaults).
 
 ---
 
@@ -332,63 +332,81 @@ Repeat steps 1–4 and use a different Google project. Paste as `GEMINI_API_KEY_
 curl http://localhost:8000/health
 ```
 
-Expected response includes:
+Expected:
 ```json
 {
   "status": "healthy",
-  "version": "3.1",
-  "regions_loaded": true,
-  "ml_models": {"crop_suitability": true, "weather_lstm": false},
+  "version": "4.0",
   "llm_available": true,
   "llm_provider": "ollama",
-  "ollama_running": true,
-  "gemini_keys": 2,
-  "timestamp": "..."
+  "gemini_keys": 2
 }
 ```
 
-### 2. Climate Signal Feature (NOAA + AI)
+### 2. Live Weather Test (Open-Meteo)
+
+```bash
+python -c "
+from src.agents.data_gathering_agent import _fetch_openmeteo_current
+result = _fetch_openmeteo_current(18.52, 73.86)
+print(result)
+"
+```
+
+Expected: `{'temperature_c': 31.5, 'humidity_pct': 68, ...}` — real live values.
+
+### 3. Archive Climatology Test (Open-Meteo Archive API)
+
+```bash
+python -c "
+from src.agents.data_gathering_agent import _fetch_openmeteo_monthly_climatology, _build_forecast_6month
+import datetime
+clim = _fetch_openmeteo_monthly_climatology(18.52, 73.86)
+print('Months:', len(clim))
+fc = _build_forecast_6month('India', 'MH', 18.52, 73.86, 31.5, datetime.datetime.now().month)
+print('Forecast months:', len(fc))
+"
+```
+
+Expected: `Months: 12`, `Forecast months: 6`
+
+### 4. Fast LLM Enrichment Test
+
+```bash
+python -c "
+from src.agents.data_gathering_agent import _llm_enrich_fast
+result = _llm_enrich_fast('Pune, Maharashtra, India', 'India', 31.5, 6)
+if result:
+    print('Soil type:', result.get('soil', {}).get('type'))
+    print('Market prices:', list(result.get('market_prices', {}).keys())[:3])
+else:
+    print('Enrichment failed — check GEMINI_API_KEY')
+"
+```
+
+### 5. Background Enrich-Soil Endpoint
+
+```bash
+curl "http://localhost:8000/api/enrich-soil?district=Pune&state=Maharashtra&country=India&temp=31.5&month=6"
+```
+
+Expected:
+```json
+{
+  "soil": {"type": "Clay-Loam", "ph": 6.5, "organic_matter": "Medium", "drainage": "Good"},
+  "market_prices": {"Rice": "₹2,400/quintal", "Wheat": "₹2,100/quintal"},
+  "district_summary": "Pune is a major agricultural district...",
+  "climate_zone": "Subtropical"
+}
+```
+
+### 6. Climate Signals (NOAA + AI)
 
 ```bash
 curl "http://localhost:8000/climate-signals?country=india&state=Maharashtra&district=Pune&climate_zone=Subtropical"
 ```
 
-Expected response shape:
-```json
-{
-  "climate_signals": {
-    "enso_phase": "Neutral",
-    "enso_strength": "Neutral",
-    "oni_value": 0.12,
-    "phase_label": "Neutral (Normal)",
-    "threats": {
-      "heat_stress": null,
-      "drought": null,
-      "frost": null,
-      "wildfire": null,
-      "cyclone": {"storm_type": "Cyclone", "in_active_season": false}
-    },
-    "ai_interpretation": {
-      "summary": "...",
-      "crop_risks": ["..."],
-      "immediate_actions": ["..."],
-      "alert_level": "None",
-      "rainfall_outlook": "Near Normal",
-      "temp_outlook": "Near Normal"
-    },
-    "forecast_adjustments": {
-      "rainfall_factor": 1.0,
-      "temp_offset_c": 0.0,
-      "description": "No ENSO adjustment (Neutral conditions)"
-    },
-    "source": "NOAA CPC + Gemini Search Grounding + Live Weather"
-  }
-}
-```
-
-If NOAA is unreachable, `oni_value` will be `0.0` and `enso_phase` will be `"Neutral"` — no error is raised.
-
-### 3. Location API
+### 7. Location APIs
 
 ```bash
 curl http://localhost:8000/api/countries
@@ -396,20 +414,15 @@ curl http://localhost:8000/api/states/india
 curl http://localhost:8000/api/districts/india/maharashtra
 ```
 
-### 4. Ollama Direct Test
+### 8. Streaming Analysis (Full Pipeline Test)
 
 ```bash
-ollama run llama3.2 "What crops grow well in Maharashtra in June?"
+curl -X POST http://localhost:8000/api/analyze/stream \
+  -H "Content-Type: application/json" \
+  -d '{"country_code":"IN","country_name":"India","state_code":"MH","state_name":"Maharashtra","district":"Pune","lat":18.52,"lon":73.86,"irrigation":"Limited","planning_days":90}'
 ```
 
-### 5. Browser Checks
-
-```
-http://localhost:8000                        ← Web Interface + Climate Panel
-http://localhost:8000/docs                   ← Swagger Interactive API Docs
-http://localhost:8000/health                 ← System status
-http://localhost:8000/climate-signals?country=india  ← ENSO + 9-threat status
-```
+Watch for SSE events: `step 1` → `step 2` (live weather) → `step 3` (archive forecast) → `step 4` (soil/market) → `step 5` (crops) → `done`
 
 ---
 
@@ -417,151 +430,79 @@ http://localhost:8000/climate-signals?country=india  ← ENSO + 9-threat status
 
 ### Step-by-Step User Flow
 
-1. **Select a country** from the dropdown (e.g., India, USA, Brazil, Germany)
-2. **Select a state** — populates dynamically from world_locations.json
-3. **Select a district** — maps to exact lat/lon for weather fetch
+1. **Select a country** — all 195 UN countries available
+2. **Select a state** — AI generates the full state list for that country
+3. **Select a district** — AI generates districts; coordinates are embedded in the response
 4. **Set irrigation** — None / Limited / Full (affects crop scoring)
-5. *(Optional)* **Provide soil texture and pH** — override AI-detected values
+5. *(Optional)* **Provide soil texture and pH** — overrides AI-detected values
 6. **Set planning period** in days (30 / 60 / 90 / 180)
-7. **Click "Analyze with AI Agent"**
-8. **Watch the streaming progress** — see each agent step in real time via SSE
-9. **Review results:**
-   - 🌡️ **Live Weather Card** — Today's temp, humidity, rainfall, wind, UV
-   - 🏔️ **Soil Card** — AI-detected soil type, pH, organic matter, drainage
+7. **Click "Analyze with AI Agent"** — starts the 5-step streaming analysis
+8. **Watch the streaming progress** — 5 steps with real-time messages:
+   - Step 1: Location resolved (lat/lon)
+   - Step 2: Live weather fetched (real temperature, humidity, rainfall)
+   - Step 3: 6-month forecast built (from real archive data)
+   - Step 4: AI soil and market analysis collected
+   - Step 5: Crop ranking completed
+9. **Review the dashboard:**
+   - 🌡️ **Metric Cards** — Temp, humidity, rainfall, soil temp, wind, UV (null = `—`)
+   - 🪨 **Soil Profile** — AI-detected type, pH, drainage (shows `🤖 Analyzing...` until ready)
    - 🌐 **Climate Intelligence Panel** — ENSO badge + 9-threat assessment
-   - 📈 **6-Month Forecast** — ENSO-adjusted monthly temp and rainfall chart
-   - 💰 **Market Prices** — Real-time (search-grounded) or zone-default prices
-   - 🌱 **Crop Rankings** — Top 6 crops sorted by AI suitability score
-10. **Ask a follow-up** in the Farmer Chat below the results
+   - 📅 **6-Month Forecast Table** — Real archive-based temperature and rainfall
+   - 💰 **Market Prices** — Real-time (search-grounded) or empty
+   - 🌱 **Crop Rankings** — AI-ranked by suitability with reasons
 
-### Climate Intelligence Panel Breakdown
+> **Note on soil card:** After the dashboard loads, a **background request** fires to `/api/enrich-soil` using search-grounded Gemini. If the fast parallel enrichment returned `🤖 Analyzing...`, this background call will update the card within 10-20 seconds with richer data — no page refresh needed.
 
-The **Climate Intelligence Panel** appears automatically between the Soil Card and the 6-Month Forecast. It shows:
+### Good First Tests
 
-| Element | Description |
-|---------|-------------|
-| ENSO Phase Badge | 🔴 El Niño / 🔵 La Niña / 🟢 Neutral + ONI value |
-| ⚠️ Alert Bar | Warning level: None / Advisory / Watch / Warning / Emergency |
-| Threat Cards | Heat Stress · Drought · Frost · Wildfire · Cyclone (if active) |
-| AI Summary | 3-sentence Gemini Search-grounded analysis for your location |
-| Rainfall Outlook | Below Normal / Near Normal / Above Normal |
-| Temp Outlook | Below Normal / Near Normal / Above Normal |
-| Crop Risks | 5 specific risks for current ENSO phase at your location |
-| Immediate Actions | 3 farming actions to take this week |
-| Forecast Adjustment | The rainfall factor and temp offset applied to the 6-month chart |
-| Data Source | NOAA CPC + Gemini Search + Live Weather |
-
-### Good First Test
-
+**India test:**
 ```
-Country: India
-State: Maharashtra
-District: Pune
-Irrigation: Limited
-Planning period: 90 days
-Soil: Loam, pH 6.8
+Country: India | State: Maharashtra | District: Pune
+Irrigation: Limited | Planning: 90 days
 ```
 
-### International Test (Demonstrates Global Coverage)
-
+**International test (global coverage):**
 ```
-Country: Germany
-State: Bavaria
-District: Munich
-Irrigation: Full
-Planning period: 150 days
+Country: Germany | State: Bavaria | District: Munich
+Irrigation: Full | Planning: 150 days
+```
+
+**Africa test:**
+```
+Country: Nigeria | State: Kano | District: Kano Municipal
+Irrigation: None | Planning: 60 days
 ```
 
 ---
 
 ## API Smoke Tests
 
-With the server running at `http://localhost:8000`:
-
 ```bash
-# Basic health
+# Health
 curl http://localhost:8000/health
 
-# List countries
+# Countries list
 curl http://localhost:8000/api/countries
 
-# States for India
+# States for India (LLM-generated)
 curl http://localhost:8000/api/states/india
 
-# Districts for Maharashtra
+# Districts for Maharashtra (LLM-generated)
 curl http://localhost:8000/api/districts/india/maharashtra
 
-# Climate signals (v3.1)
+# Background soil enrichment
+curl "http://localhost:8000/api/enrich-soil?district=Pune&state=Maharashtra&country=India&temp=31&month=6"
+
+# Climate signals
 curl "http://localhost:8000/climate-signals?country=india&state=Maharashtra&district=Pune"
 
-# Climate signals for a European location
+# Climate signals (Europe)
 curl "http://localhost:8000/climate-signals?country=germany&state=Bavaria&district=Munich&climate_zone=Temperate"
-```
 
-**Main Streaming Endpoint:**
-
-```bash
+# Streaming analysis (full pipeline)
 curl -X POST http://localhost:8000/api/analyze/stream \
   -H "Content-Type: application/json" \
-  -d '{"country":"India","state":"Maharashtra","district":"Pune","irrigation":"Limited","planning_days":90}'
-```
-
-**Legacy v2.x Fallback (Windows PowerShell):**
-
-```powershell
-curl -X POST http://localhost:8000/recommend `
-  -H "Content-Type: application/json" `
-  -d "{`"region_id`":`"MH_PUNE`",`"irrigation`":`"Limited`",`"planning_days`":90}"
-```
-
----
-
-## Model and Data Checks
-
-Run from inside `agri_crop_recommendation/`:
-
-```bash
-# v3.1 API Tests
-python scripts/test_api.py
-
-# Chatbot Integration Test
-python scripts/test_chatbot.py
-
-# Legacy ML Model Verification
-python scripts/verify_models.py
-```
-
-### Critical v3.1 Data Files
-
-```text
-data/reference/
-├── world_locations.json  (Legacy reference — superseded by LLM agent in v3.1)
-└── crop_knowledge.json   (Core LLM Context Database, 50+ crops)
-
-src/agents/
-├── location_agent.py       (195 UN countries ISO list; states + districts 100% LLM-driven)
-├── llm_location_agent.py   (Gemini/Ollama: states, districts, coords — 24h cache)
-└── data_gathering_agent.py  (Updated — Step 3 now includes ENSO adjustment)
-
-src/services/
-└── climate_signals.py      (9-dimensional climate threat assessment — NOAA + Gemini Search)
-
-src/agents/ (also important)
-├── crop_agent.py           (AI crop ranking — Search Grounding + country crop hints)
-└── web_search_agent.py     (DuckDuckGo tool for Ollama)
-```
-
-### Legacy Files (Maintained for Fallback)
-
-```text
-models/
-├── crop_suitability/       ← Random Forest ML (v2.x)
-├── weather_lstm/           ← LSTM weather forecast (v2.x)
-└── weather_xgboost/        ← XGBoost weather (v2.x)
-
-data/reference/
-├── regions.json            ← India 640-district database (v2.x)
-└── regional_crops.json     ← India regional crop catalog (v2.x)
+  -d '{"country_code":"IN","country_name":"India","state_code":"MH","state_name":"Maharashtra","district":"Pune","lat":18.52,"lon":73.86,"irrigation":"Limited","planning_days":90}'
 ```
 
 ---
@@ -572,18 +513,19 @@ data/reference/
 |---------|-------------|-----|
 | `python` not found | Python not on PATH | Install Python 3.8+ and tick **"Add Python to PATH"** |
 | PowerShell activation blocked | Execution policy | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| `pip install` fails on torch | Old pip or network issue | `python -m pip install --upgrade pip`, then retry |
-| `ModuleNotFoundError: src` | Running from wrong directory | Must run from inside `agri_crop_recommendation/` |
-| Chat / Recommendations unavailable | Ollama stopped or no Gemini key | Run `ollama serve` or add `GEMINI_API_KEY` to `.env` |
-| Ollama model missing | Model was not pulled | `ollama pull llama3.2` |
+| `pip install` fails on torch | Old pip | `python -m pip install --upgrade pip`, then retry |
+| `ModuleNotFoundError: src` | Wrong directory | Must run from inside `agri_crop_recommendation/` |
+| Soil shows `🤖 Analyzing...` after 30s | No Gemini key or quota exceeded | Add `GEMINI_API_KEY` or `GEMINI_API_KEY_2` to `.env` |
+| Market prices empty | LLM enrichment failed | Add Gemini key — market prices require Gemini Search Grounding |
+| Crop recommendations empty | All LLM providers failed | Check Ollama is running: `ollama serve` + check Gemini key |
 | `429 RESOURCE_EXHAUSTED` | Gemini quota exceeded | Add `GEMINI_API_KEY_2` and `GEMINI_API_KEY_3` to `.env` |
-| Search Grounding not working | Model doesn't support it | Use `gemini-2.0-flash` or `gemini-2.5-flash` in search-capable slot |
-| Climate Panel not showing | NOAA unreachable or JS error | Check browser console. NOAA fetch silently falls back to Neutral. |
-| `oni_value` always 0.0 | NOAA unreachable (firewall) | Normal fallback — system assumes Neutral, no error raised |
-| Weather data missing | Open-Meteo unreachable | Retry later; zone-based estimates are used automatically |
-| Port 8000 in use | Another server running | Stop it or use an alternate port (see below) |
+| Forecast shows 0 months | Open-Meteo Archive API down + no Gemini | Both data sources unavailable; retry later |
+| Weather shows `—` everywhere | Open-Meteo current API failed + no Gemini | Retry later or add Gemini key for LLM weather estimate |
+| `oni_value` always 0.0 | NOAA unreachable (firewall) | Normal fallback — Neutral phase assumed, no error raised |
+| Port 8000 in use | Another server running | Stop it or run on alternate port (see below) |
+| Ollama model missing | Model not pulled | `ollama pull llama3.2` |
+| Search Grounding not working | Model doesn't support it | Requires `gemini-2.0-flash` or `gemini-2.5-flash` |
 | `world_locations.json` not found | Wrong working directory | Run from `agri_crop_recommendation/` |
-| Hindi crop names in non-India result | LLM geographic hallucination | The validation layer auto-detects and uses zone fallback instead |
 
 ### Running on a Different Port
 
@@ -595,80 +537,77 @@ Then open `http://localhost:8080`.
 
 ### Checking Log Output
 
-The server logs each agent step. Look for:
+The server logs each agent step. Key messages to look for:
+
 ```
-[DataAgent] Live weather: 32.4°C, rain7d=15.2mm, humidity=68%
-[ClimateSignals] El Nino ONI=1.2 | heat=None drought=None frost=None cyclone=Cyclone wildfire=None
+[DataAgent] Live weather OK for (18.52, 73.86): 31.5°C, 68% humidity, 15.2mm rain
+[DataAgent] Climatology fetched for 18.52,73.86: 12 months
+[DataAgent] Forecast built from Open-Meteo Archive: 6 months
+[DataAgent] Fast enrich OK (gemini-2.0-flash-lite, key ...abc123)
 [CropAgent] Gemini search-grounded OK (gemini-2.0-flash, key ...abc123) → 6 crops
-[DataAgent] Gemini search-grounded enrich OK (gemini-2.0-flash, key ...abc123)
+[ClimateSignals] El Nino ONI=1.2 | heat=None drought=None frost=None cyclone=Cyclone
+```
+
+Warning messages that indicate degraded mode:
+
+```
+[DataAgent] Open-Meteo current API failed: <error>  ← Falls back to LLM estimate
+[DataAgent] Open-Meteo Archive API failed: <error>  ← Falls back to LLM forecast
+[DataAgent] Fast enrich failed for Pune, Maharashtra, India  ← Soil = Analyzing...
+[CropAgent] All LLM providers failed — returning empty  ← No crops shown
 ```
 
 ---
 
-## Common Commands
+## Common Commands Reference
 
 ```bash
 # Start the server
 python run_website.py
 
-# Run all API checks
-python scripts/test_api.py
+# Test data pipeline
+python -c "
+from src.agents.data_gathering_agent import _fetch_openmeteo_monthly_climatology
+import datetime
+c = _fetch_openmeteo_monthly_climatology(18.52, 73.86)
+print('Archive months:', len(c) if c else 'FAILED')
+"
 
-# Test the chatbot
-python scripts/test_chatbot.py
+# Test fast LLM enrichment
+python -c "
+from src.agents.data_gathering_agent import _llm_enrich_fast
+r = _llm_enrich_fast('Pune, Maharashtra, India', 'India', 31, 6)
+print('Soil:', r.get('soil') if r else 'FAILED')
+"
 
-# Test ENSO endpoint
-curl "http://localhost:8000/climate-signals?country=india"
+# Test import health
+python -c "
+from src.agents.data_gathering_agent import gather_location_data, _llm_enrich_fast
+from src.agents.crop_agent import recommend_crops_agent
+from src.api.app import app
+print('All imports OK')
+"
 
-# Check Ollama models
+# Check Ollama
 ollama list
-
-# Pull the default model
 ollama pull llama3.2
 
-# Check server health
+# Health endpoint
 curl http://localhost:8000/health
 
-# Test streaming analyze (basic)
-curl -X POST http://localhost:8000/api/analyze/stream \
-  -H "Content-Type: application/json" \
-  -d '{"country":"India","state":"Maharashtra","district":"Pune","irrigation":"Limited","planning_days":90}'
+# Background soil enrichment
+curl "http://localhost:8000/api/enrich-soil?district=Pune&state=Maharashtra&country=India&temp=31&month=6"
+
+# Climate signals
+curl "http://localhost:8000/climate-signals?country=india&state=Maharashtra&district=Pune"
+
+# Full streaming analysis (PowerShell)
+Invoke-WebRequest -Uri "http://localhost:8000/api/analyze/stream" -Method POST `
+  -ContentType "application/json" `
+  -Body '{"country_code":"IN","country_name":"India","state_code":"MH","state_name":"Maharashtra","district":"Pune","lat":18.52,"lon":73.86,"irrigation":"Limited","planning_days":90}'
 ```
 
 ---
 
-## What To Do After Setup
-
-### Explore Global Coverage
-- Try two districts in entirely different countries (e.g., **Pune, India** vs **Munich, Germany**) and compare recommendations.
-- Test an African location (e.g., **Lagos, Nigeria**) or Southeast Asia (e.g., **Bangkok, Thailand**).
-
-### Explore Climate Intelligence
-- Check the **Climate Intelligence Panel** — observe whether ENSO adjustments change the 6-month rainfall values vs the baseline.
-- During an active El Niño year, switch irrigation from `None` to `Full` and observe how drought-tolerant crops rise in ranking.
-- Look for cyclone/typhoon alerts for coastal regions (e.g., Odisha, India or Philippines).
-
-### Test Sensitivity
-- Override soil pH and texture and observe how different soil types change the suitability score ranking.
-- Change planning days from 30 to 180 and observe how the crop list changes.
-
-### Explore the AI Chat
-- Ask: *"How does the current El Niño affect my wheat crop in Pune?"*
-- Ask: *"What is the best fertilizer schedule for cotton in this climate?"*
-- Ask: *"When should I plant rabi crops given the current forecast?"*
-
-### Use the API Docs
-- Open `/docs` and explore the `/climate-signals`, `/api/analyze/stream`, and `/chat/stream` request models.
-- Use the **"Try it out"** feature in Swagger to test any endpoint interactively.
-
-### Train the ML Model (Optional)
-```bash
-cd agri_crop_recommendation
-python scripts/train_model.py
-```
-This trains the Scikit-learn Random Forest on local crop suitability data. Once trained, final recommendations blend ML (60%) + rule-based engine (40%).
-
----
-
-*End of Setup Guide — AI Powered Weather Resilient Crop Advisor v3.1*  
+*End of Setup Guide — AI Powered Weather Resilient Crop Advisor v4.0*  
 *Prepared by Tirth Chankeshwara | CDAC-Pune | June 2026*

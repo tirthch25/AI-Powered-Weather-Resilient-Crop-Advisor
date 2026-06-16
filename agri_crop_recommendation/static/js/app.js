@@ -98,7 +98,7 @@ async function onCountryChange() {
   const selectedOpt = sel.options[sel.selectedIndex];
   STATE.countryCode = code;
   STATE.countryName = selectedOpt ? selectedOpt.dataset.name : '';
-  const isStatic = selectedOpt && selectedOpt.dataset.hasStatic === '1';
+  // All location data is 100% AI-generated — no static vs. dynamic distinction
 
   // Reset downstream
   const stateSel = $('state'), distSel = $('district');
@@ -144,18 +144,14 @@ async function onStateChange() {
   const selectedOpt = sel.options[sel.selectedIndex];
   STATE.stateCode = code;
   STATE.stateName = selectedOpt ? (selectedOpt.dataset.name || code) : code;
-  const isStatic = selectedOpt && selectedOpt.dataset.source === 'static';
+  // All districts are AI-generated — no static lookup needed
 
   const distSel = $('district');
   STATE.district = '';
   STATE.lat = null;
   STATE.lon = null;
 
-  if (isStatic) {
-    distSel.innerHTML = '<option value="">⏳ Loading districts...</option>';
-  } else {
-    distSel.innerHTML = '<option value="">🤖 AI generating districts for ' + STATE.stateName + '...</option>';
-  }
+  distSel.innerHTML = '<option value="">🤖 AI generating districts for ' + STATE.stateName + '...</option>';
   distSel.disabled = true;
 
   const oldBadge = document.getElementById('aiDistrictBadge');
@@ -176,7 +172,7 @@ async function onStateChange() {
       opt.value          = d.name;
       opt.dataset.lat    = d.lat || '';
       opt.dataset.lon    = d.lon || '';
-      opt.dataset.source = d.source || 'static';
+      opt.dataset.source = d.source || 'llm';
       opt.textContent    = d.name;
       distSel.appendChild(opt);
     });
@@ -292,7 +288,13 @@ async function onAnalyzeSubmit(e) {
     STATE.chatRegionKey = `${STATE.countryCode}_${STATE.stateCode}_${STATE.district}`.toUpperCase();
 
     finishProgress();
-    setTimeout(() => renderDashboard(finalData), 600);
+    setTimeout(() => {
+      renderDashboard(finalData);
+      // Fire background soil enrichment — upgrades soil card with search-grounded data
+      const loc = finalData.location || {};
+      const cur = (finalData.gathered_data || {}).current || {};
+      _bgEnrichSoil(loc, cur, finalData.gathered_data);
+    }, 600);
 
   } catch (err) {
     hideProgress();
@@ -398,16 +400,18 @@ function renderDashboard(data) {
   animateCount('val-wind',     current.wind_kmh,      0);
   animateCount('val-uv',       current.uv_index,      1);
 
-  $('sub-temp').textContent  = `Feels ${current.feels_like_c || '?'}°C`;
+  $('sub-temp').textContent  = current.feels_like_c != null ? `Feels ${current.feels_like_c}°C` : 'Current';
   $('sub-humidity').textContent = getHumidityDesc(current.humidity_pct);
   $('sub-uv').textContent = getUVDesc(current.uv_index);
   $('sub-soil').textContent  = 'Surface layer';
 
-  // Soil card
-  $('soil-type').textContent     = soil.type     || 'Unknown';
-  $('soil-ph').textContent       = soil.ph       ? `pH ${soil.ph}` : '-';
-  $('soil-organic').textContent  = soil.organic_matter || '-';
-  $('soil-drainage').textContent = soil.drainage || '-';
+  // Soil card — show 'Analyzing...' when LLM hasn't returned data yet
+  const soilType = soil.type && soil.type !== 'Unknown' ? soil.type : null;
+  const soilPh   = soil.ph != null ? soil.ph : null;
+  $('soil-type').textContent     = soilType || '🤖 Analyzing...';
+  $('soil-ph').textContent       = soilPh   ? `pH ${soilPh}`   : '🤖 Analyzing...';
+  $('soil-organic').textContent  = (soil.organic_matter && soil.organic_matter !== 'Unknown') ? soil.organic_matter : '🤖 Analyzing...';
+  $('soil-drainage').textContent = (soil.drainage && soil.drainage !== 'Unknown')       ? soil.drainage       : '🤖 Analyzing...';
   $('districtSummary').textContent = gathered.district_summary || '';
 
   // Forecast table
@@ -447,7 +451,12 @@ function renderDashboard(data) {
 function animateCount(id, target, decimals=0) {
   const el  = $(id);
   if (!el) return;
-  const val = parseFloat(target) || 0;
+  // Treat null / undefined / NaN as '—' (no data)
+  if (target === null || target === undefined || target === '' || isNaN(parseFloat(target))) {
+    el.textContent = '—';
+    return;
+  }
+  const val = parseFloat(target);
   const dur = 1200;
   const start = performance.now();
   function frame(now) {
@@ -458,6 +467,74 @@ function animateCount(id, target, decimals=0) {
     else el.textContent = val.toFixed(decimals);
   }
   requestAnimationFrame(frame);
+}
+
+// ── BACKGROUND SOIL ENRICHMENT ────────────────────────────────────────────────
+// After the main streaming analysis renders, silently fetch richer soil and
+// market data from the search-grounded Gemini endpoint and update the card.
+async function _bgEnrichSoil(loc, current, gathered) {
+  if (!loc.district || !loc.country_name) return;
+  try {
+    const temp  = current.temperature_c ?? 25;
+    const month = new Date().getMonth() + 1;
+    const url = `/api/enrich-soil?district=${encodeURIComponent(loc.district)}`
+              + `&state=${encodeURIComponent(loc.state_name || '')}`
+              + `&country=${encodeURIComponent(loc.country_name)}`
+              + `&temp=${temp}&month=${month}`;
+    const res = await fetch(url);
+    if (!res.ok) return;   // gracefully ignore if LLM not available
+    const data = await res.json();
+    if (data && data.soil) {
+      _updateSoilCard(data.soil, data.market_prices, data.district_summary);
+    }
+  } catch(e) {
+    // Silent — don't disrupt the user if background fetch fails
+    console.debug('[bgEnrichSoil] skipped:', e.message);
+  }
+}
+
+function _updateSoilCard(soil, market, summary) {
+  // Only update cells that were still 'Analyzing...' or unknown
+  const typeEl = $('soil-type');
+  if (typeEl && (!typeEl.textContent || typeEl.textContent.includes('Analyzing') || typeEl.textContent === 'Unknown')) {
+    if (soil.type && soil.type !== 'Unknown') {
+      typeEl.textContent = soil.type;
+      typeEl.style.animation = 'fadeIn 0.4s ease';
+    }
+  }
+  const phEl = $('soil-ph');
+  if (phEl && (!phEl.textContent || phEl.textContent.includes('Analyzing') || phEl.textContent === '-')) {
+    if (soil.ph != null) {
+      phEl.textContent = `pH ${soil.ph}`;
+      phEl.style.animation = 'fadeIn 0.4s ease';
+    }
+  }
+  const orgEl = $('soil-organic');
+  if (orgEl && (!orgEl.textContent || orgEl.textContent.includes('Analyzing') || orgEl.textContent === '-' || orgEl.textContent === 'Unknown')) {
+    if (soil.organic_matter && soil.organic_matter !== 'Unknown') {
+      orgEl.textContent = soil.organic_matter;
+      orgEl.style.animation = 'fadeIn 0.4s ease';
+    }
+  }
+  const drEl = $('soil-drainage');
+  if (drEl && (!drEl.textContent || drEl.textContent.includes('Analyzing') || drEl.textContent === '-' || drEl.textContent === 'Unknown')) {
+    if (soil.drainage && soil.drainage !== 'Unknown') {
+      drEl.textContent = soil.drainage;
+      drEl.style.animation = 'fadeIn 0.4s ease';
+    }
+  }
+  // Update district summary if better data arrived
+  const summEl = $('districtSummary');
+  if (summEl && summary && (!summEl.textContent || summEl.textContent.length < 30)) {
+    summEl.textContent = summary;
+  }
+  // Update market prices if they were empty
+  if (market && Object.keys(market).length > 0) {
+    const grid = $('marketGrid');
+    if (grid && grid.textContent.includes('being gathered')) {
+      renderMarketPrices(market);
+    }
+  }
 }
 
 function getHumidityDesc(h) {

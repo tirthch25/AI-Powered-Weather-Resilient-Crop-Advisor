@@ -697,6 +697,47 @@ def get_current_weather(region_id: str):
         raise HTTPException(status_code=500, detail=f"Weather fetch error: {str(e)}")
 
 
+# ----------- Soil Enrichment Endpoint (background re-fetch for streaming) -----------
+
+@app.get("/api/enrich-soil")
+def enrich_soil_endpoint(
+    district: str = "",
+    state: str = "",
+    country: str = "",
+    temp: float = 25.0,
+    month: int = 0,
+):
+    """
+    Background soil + market enrichment endpoint.
+    Called from the frontend after the main analysis completes so that
+    the streaming path (which uses _llm_enrich_fast for speed) can be
+    upgraded to full search-grounded data without blocking the user.
+
+    Returns: {soil, market_prices, district_summary, climate_zone}
+    """
+    if not _AGENTS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Agents unavailable")
+    try:
+        from src.agents.data_gathering_agent import _llm_enrich
+        import datetime as _dt2
+        location_str = f"{district}, {state}, {country}".strip(", ")
+        current_month = month or _dt2.datetime.now().month
+        data = _llm_enrich(location_str, country, temp, current_month)
+        if not data:
+            raise HTTPException(status_code=204, detail="LLM enrichment returned no data")
+        return {
+            "soil":             data.get("soil", {}),
+            "market_prices":    data.get("market_prices", {}),
+            "district_summary": data.get("district_summary", ""),
+            "climate_zone":     data.get("climate_zone", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("[/api/enrich-soil] %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ----------- Climate Signals Endpoint (ENSO / El Niño / La Niña) -----------
 
 @app.get("/climate-signals")
@@ -1085,8 +1126,7 @@ def api_analyze_stream(request: AnalyzeRequest):
         try:
             from src.agents.data_gathering_agent import (
                 _fetch_openmeteo_current, _build_forecast_6month,
-                _llm_enrich, _get_world_zone, _ZONE_CLIMATE,
-                _ZONE_SOIL_DEFAULTS, _default_market_prices, _guess_season,
+                _llm_enrich, _llm_enrich_fast, _llm_estimate_current_weather, _guess_season,
             )
             current_month = _dt.datetime.now().month
             loc_str = request.district + ', ' + request.state_name + ', ' + request.country_name
@@ -1099,11 +1139,12 @@ def api_analyze_stream(request: AnalyzeRequest):
                 lat, lon = resolve_coordinates(request.country_code, request.state_code, request.district)
             yield _evt(1, 22, 'Location resolved: ' + str(round(lat,3)) + 'N, ' + str(round(lon,3)) + 'E')
 
-            # Steps 2+4: Fire weather + LLM IN PARALLEL
+            # Steps 2+4: Fire weather + LLM enrichment IN PARALLEL
             yield _evt(2, 30, 'Fetching live weather & running AI analysis in parallel...')
             executor = _cf.ThreadPoolExecutor(max_workers=2)
             wx_future  = executor.submit(_fetch_openmeteo_current, lat, lon)
-            llm_future = executor.submit(_llm_enrich, loc_str, request.country_name, 25.0, current_month)
+            # LLM fast enrich runs in parallel — completes in ~5-8s, well within the budget
+            llm_future = executor.submit(_llm_enrich_fast, loc_str, request.country_name, 25.0, current_month)
 
             try:
                 live_wx = wx_future.result(timeout=10)
@@ -1113,79 +1154,107 @@ def api_analyze_stream(request: AnalyzeRequest):
 
             if live_wx:
                 current = live_wx
-                yield _evt(2, 42, 'Live weather: ' + str(current['temperature_c']) + 'C  |  Humidity: ' + str(current['humidity_pct']) + '%  |  Rain 7d: ' + str(current['rainfall_7d_mm']) + ' mm')
+                yield _evt(2, 42, 'Live weather: ' + str(current['temperature_c']) + '\u00b0C  |  Humidity: ' + str(current['humidity_pct']) + '%  |  Rain 7d: ' + str(current['rainfall_7d_mm']) + ' mm')
             else:
-                wz_t = _get_world_zone(request.country_name, lat)
-                zc = (_ZONE_CLIMATE.get(wz_t) or _ZONE_CLIMATE['Subtropical']).get(current_month, {})
-                ta = zc.get('temp', 25)
-                current = {'temperature_c': ta, 'temp_max_c': ta+6, 'temp_min_c': ta-6,
-                    'humidity_pct': zc.get('hum',65), 'soil_temp_c': round(ta-2,1),
-                    'rainfall_7d_mm': round(zc.get('rain',60)/4,1),
-                    'wind_kmh': 12.0, 'uv_index': 6.0, 'feels_like_c': round(ta+2,1)}
-                yield _evt(2, 42, 'Using zone-based weather estimate (API unavailable)')
+                # No static zone tables — try LLM weather estimate
+                current = _llm_estimate_current_weather(request.country_name, lat, lon, current_month)
+                if current:
+                    yield _evt(2, 42, 'AI-estimated weather: ' + str(current.get('temperature_c','?')) + '\u00b0C  |  Humidity: ' + str(current.get('humidity_pct','?')) + '%')
+                else:
+                    current = {
+                        'temperature_c': None, 'temp_max_c': None, 'temp_min_c': None,
+                        'humidity_pct': None, 'soil_temp_c': None, 'rainfall_7d_mm': 0.0,
+                        'wind_kmh': None, 'uv_index': None, 'feels_like_c': None,
+                    }
+                    yield _evt(2, 42, 'Weather data unavailable — analysis will use AI estimates only')
 
-            # Step 3: Forecast - pure computation, instant
-            yield _evt(3, 55, 'Building 6-month seasonal forecast...')
+            # Step 3: Real 6-month forecast (Open-Meteo Archive API → LLM fallback)
+            yield _evt(3, 55, 'Building 6-month forecast from real historical climate data...')
+            live_temp = current.get('temperature_c')
             forecast_6month = _build_forecast_6month(
                 country=request.country_name, state_code=request.state_code,
-                lat=lat, live_temp_avg=current['temperature_c'], current_month=current_month)
-            season = _guess_season(current_month, request.country_name)
+                lat=lat, lon=lon, live_temp_avg=live_temp, current_month=current_month)
+            season = _guess_season(current_month, request.country_name, lat)
             yield _evt(3, 65, 'Forecast ready: ' + str(len(forecast_6month)) + ' months  |  Season: ' + season)
 
-            # Step 4: Collect LLM result (already running in background)
+            # Step 4: Collect LLM result (soil + market + climate zone)
             yield _evt(4, 70, 'Collecting AI soil and market analysis...')
             try:
-                llm_data = llm_future.result(timeout=3)
+                # Budget: weather(~8s) + forecast(~5-15s) = up to 23s elapsed.
+                # _llm_enrich_fast targets <8s so it should be done by now.
+                llm_data = llm_future.result(timeout=20)
             except Exception:
                 llm_data = None
 
-            world_zone = _get_world_zone(request.country_name, lat)
+            # Assemble soil — NO static zone defaults
             if llm_data and llm_data.get('soil') and isinstance(llm_data['soil'].get('ph'), (int, float)):
                 soil = llm_data['soil']
-                soil.setdefault('type', _ZONE_SOIL_DEFAULTS.get(world_zone, {}).get('type', 'Loam'))
-                soil.setdefault('organic_matter', 'Medium')
-                soil.setdefault('drainage', 'Medium')
+                soil.setdefault('type', 'Unknown')
+                soil.setdefault('organic_matter', 'Unknown')
+                soil.setdefault('drainage', 'Unknown')
             else:
-                soil = dict(_ZONE_SOIL_DEFAULTS.get(world_zone,
-                    {'type': 'Loam', 'ph': 7.0, 'organic_matter': 'Medium', 'drainage': 'Good'}))
+                soil = {'type': 'Unknown', 'ph': None, 'organic_matter': 'Unknown', 'drainage': 'Unknown'}
 
             if request.soil_texture:
-                soil = {'type': request.soil_texture, 'ph': request.soil_ph or soil.get('ph', 7.0),
+                soil = {'type': request.soil_texture, 'ph': request.soil_ph or soil.get('ph'),
                     'organic_matter': request.soil_organic or 'Medium',
                     'drainage': request.soil_drainage or 'Medium'}
 
+            # Market prices — NO static templates
             market_prices = (
                 llm_data.get('market_prices')
                 if llm_data and len(llm_data.get('market_prices', {})) >= 2
-                else _default_market_prices(request.country_name, world_zone)
+                else {}
             )
-            zlm = {'Tropical':'Tropical','Subtropical':'Subtropical','Arid':'Arid',
-                   'Mediterranean':'Mediterranean','Temperate':'Temperate','Continental':'Continental',
-                   'Temperate_Americas':'Temperate','Tropical_Americas':'Tropical',
-                   'Subtropical_S':'Subtropical','Arid_Oceania':'Semi-Arid'}
-            climate_zone = (llm_data.get('climate_zone') if llm_data and llm_data.get('climate_zone')
-                else zlm.get(world_zone, 'Subtropical'))
-            district_summary = (llm_data.get('district_summary') if llm_data and llm_data.get('district_summary')
+
+            # Climate zone — lat-based estimate when LLM unavailable
+            if llm_data and llm_data.get('climate_zone'):
+                climate_zone = llm_data['climate_zone']
+            else:
+                alat = abs(lat)
+                if alat < 15:    climate_zone = 'Tropical'
+                elif alat < 30:  climate_zone = 'Subtropical'
+                elif alat < 45:  climate_zone = 'Temperate'
+                elif alat < 60:  climate_zone = 'Continental'
+                else:            climate_zone = 'Polar'
+
+            district_summary = (
+                llm_data.get('district_summary')
+                if llm_data and llm_data.get('district_summary')
                 else (request.district + ' is an agricultural district in ' + request.state_name +
-                      ', ' + request.country_name + '. ' + climate_zone + ' climate, ' +
-                      str(current['temperature_c']) + 'C current temperature.'))
+                      ', ' + request.country_name + '. ' + climate_zone + ' climate.')
+            )
+
+            # Step 4b: ENSO/Climate Signal adjustments
+            climate_signal = {}
+            try:
+                from src.services.climate_signals import get_climate_signals, apply_enso_to_forecast
+                climate_signal = get_climate_signals(
+                    location_str=loc_str,
+                    climate_zone=climate_zone,
+                    country=request.country_name,
+                )
+                forecast_6month = apply_enso_to_forecast(forecast_6month, climate_signal)
+            except Exception as _es:
+                pass
 
             gathered = {'current': current, 'forecast_6month': forecast_6month, 'soil': soil,
-                'season': season, 'climate_zone': climate_zone,
+                'season': season, 'climate_zone': climate_zone, 'climate_signal': climate_signal,
                 'market_prices': market_prices, 'district_summary': district_summary}
-            yield _evt(4, 82, 'Soil: ' + str(soil.get('type','?')) + ' pH ' + str(soil.get('ph','?')) + '  |  ' + str(len(market_prices)) + ' crop prices ready')
+            soil_ph_str = str(soil.get('ph','?')) if soil.get('ph') is not None else '—'
+            yield _evt(4, 82, 'Soil: ' + str(soil.get('type','Unknown')) + ' pH ' + soil_ph_str + '  |  ' + str(len(market_prices)) + ' crop prices ready')
 
-            # Step 5: Crop recommendations
-            yield _evt(5, 88, 'Running crop suitability ranking for ' + request.district + '...')
+            # Step 5: Crop recommendations (100% LLM, no static tables)
+            yield _evt(5, 88, 'Running AI crop suitability ranking for ' + request.district + '...')
             crops = recommend_crops_agent(
                 country=request.country_name, state=request.state_name,
                 district=request.district, gathered_data=gathered,
                 irrigation=request.irrigation, planning_days=request.planning_days, soil_override=None)
             yield _evt(5, 96, str(len(crops)) + ' crops ranked by suitability')
 
-            if set_weather_cache and _LLM_CHAT_AVAILABLE:
+            if set_weather_cache and _LLM_CHAT_AVAILABLE and current.get('temperature_c') is not None:
                 cur = gathered['current']
-                wx_sum = 'Temp ' + str(cur.get('temperature_c','?')) + 'C, humidity ' + str(cur.get('humidity_pct','?')) + '%, rain7d ' + str(cur.get('rainfall_7d_mm','?')) + 'mm'
+                wx_sum = 'Temp ' + str(cur.get('temperature_c','?')) + '\u00b0C, humidity ' + str(cur.get('humidity_pct','?')) + '%, rain7d ' + str(cur.get('rainfall_7d_mm','?')) + 'mm'
                 ck = (request.country_code+'_'+request.state_code+'_'+request.district).upper()
                 set_weather_cache(ck, wx_sum)
 
@@ -1193,7 +1262,7 @@ def api_analyze_stream(request: AnalyzeRequest):
                 'state_code': request.state_code, 'state_name': request.state_name,
                 'district': request.district, 'lat': lat, 'lon': lon},
                 'gathered_data': gathered, 'recommended_crops': crops,
-                'agent': 'open-meteo+zone+llm(parallel)', 'version': '3.0'}
+                'agent': 'open-meteo-archive+llm(parallel)', 'version': '4.0'}
             yield _evt('done', 100, 'Analysis complete!', result)
 
         except Exception as exc:

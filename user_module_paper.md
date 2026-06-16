@@ -1,9 +1,9 @@
 # User Module Paper
-## AI Powered Weather Resilient Crop Advisor — v3.1
+## AI Powered Weather Resilient Crop Advisor — v4.0
 
 **Document Type:** User Module Paper  
 **Project:** AI Powered Weather Resilient Crop Advisor  
-**Version:** 3.1  
+**Version:** 4.0 (Zero Static Data Release)  
 **Platform:** Web Application (FastAPI + HTML/CSS/JS + SSE)  
 **Repository:** https://github.com/tirthch25/AI-Powered-Weather-Resilient-Crop-Advisor  
 
@@ -13,7 +13,7 @@
 
 1. [Project Overview](#1-project-overview)
 2. [System Architecture](#2-system-architecture)
-3. [Agent Modules (v3.1)](#3-agent-modules-v31)
+3. [Agent Modules (v4.0)](#3-agent-modules-v40)
    - 3.1 Location Agent
    - 3.2 LLM Location Agent
    - 3.3 Data Gathering Agent
@@ -36,34 +36,18 @@
    - 6.1 Dashboard Structure
    - 6.2 SSE Client
    - 6.3 Climate Intelligence Panel
+   - 6.4 Background Soil Enrichment
 7. [Data Layer](#7-data-layer)
    - 7.1 World Locations
    - 7.2 Crop Knowledge Database
-   - 7.3 Climate Zone Tables
-   - 7.4 Market Price Templates
+   - 7.3 Open-Meteo Archive API (replaces Climate Zone Tables)
+   - 7.4 LLM-Driven Market Prices (replaces Market Price Templates)
    - 7.5 Legacy Data (v2.x)
 8. [Machine Learning Pipeline](#8-machine-learning-pipeline)
-   - 8.1 Random Forest Suitability Model
-   - 8.2 LSTM Weather Forecasting
-   - 8.3 XGBoost Weather Model
 9. [LLM Integration Details](#9-llm-integration-details)
-   - 9.1 Provider Priority Chain
-   - 9.2 Gemini Key Rotation
-   - 9.3 Google Search Grounding
-   - 9.4 Model Fallback Chain
-   - 9.5 In-Memory Caching
 10. [Climate Signal Intelligence — Deep Dive](#10-climate-signal-intelligence--deep-dive)
-    - 10.1 ENSO Detection
-    - 10.2 9 Threat Assessors
-    - 10.3 ENSO Zone Mapping
-    - 10.4 Forecast Adjustment Formula
-    - 10.5 Cyclone Basin Tracking
 11. [Crop Agent — Deep Dive](#11-crop-agent--deep-dive)
-    - 11.1 Country Crop Hints (50+ Countries)
-    - 11.2 Validation Layer
-    - 11.3 Fallback Tables by Climate Zone
-    - 11.4 Prompt Engineering
-12. [Data Flow Diagram (v3.1)](#12-data-flow-diagram-v31)
+12. [Data Flow Diagram (v4.0)](#12-data-flow-diagram-v40)
 13. [Global API Reference](#13-global-api-reference)
 14. [Technology Stack & Dependencies](#14-technology-stack--dependencies)
 15. [System Limitations & Future Scope](#15-system-limitations--future-scope)
@@ -81,6 +65,7 @@ The **AI Powered Weather Resilient Crop Advisor v3.1** is a globally scalable, a
 | **v2.x** | India-only, 640 districts | Static rule-based engine + basic ML models |
 | **v3.0** | Global, 50+ countries | Multi-agent LLM pipeline, Open-Meteo live weather |
 | **v3.1** | Global + Climate Intelligence | 9-dimensional climate assessment, Search Grounding, Web Search Agent |
+| **v4.0** | Global + Zero Static Data | Open-Meteo Archive API, `_llm_enrich_fast`, background `/api/enrich-soil`, no static fallbacks |
 
 ### 1.2 Goals
 
@@ -200,22 +185,17 @@ flowchart TD
 
 ### 3.3 Data Gathering Agent (`data_gathering_agent.py`)
 
-**Purpose:** Assembles all real-world data needed for crop recommendations: live weather, 6-month forecast, ENSO adjustment, soil data, market prices.
+**Purpose:** Assembles all real-world data for crop recommendations: live weather, 6-month historical-based forecast, ENSO adjustment, soil data, market prices.
 
-**Size:** 845 lines — the largest agent module.
+**Version 4.0 changes:** All static zone tables removed. Every data point comes from a live API or LLM.
 
-#### Weather Fetching
+#### Current Weather Fetching (`_fetch_openmeteo_current`)
 
-**Source:** Open-Meteo API (free, no key)  
+**Source:** Open-Meteo Current API (free, no key)  
 **URL:** `https://api.open-meteo.com/v1/forecast`  
 **Cache:** 30-minute in-memory per `(lat, lon)` rounded to 2 decimal places  
 
-**Data fetched per request:**
-```
-daily: temperature_2m_max, temperature_2m_min, precipitation_sum,
-       windspeed_10m_max, uv_index_max, relativehumidity_2m_mean
-past_days: 7, forecast_days: 1
-```
+**Fallback (NEW in v4.0):** `_llm_estimate_current_weather(country, lat, lon, month)` — Gemini estimates typical conditions from coordinates when the API is down. No static zone table is used.
 
 **Output fields:**
 | Field | Description |
@@ -228,56 +208,45 @@ past_days: 7, forecast_days: 1
 | `wind_kmh` | Max wind speed |
 | `uv_index` | UV index (capped at 11) |
 | `feels_like_c` | Heat index approximation |
-| `soil_temp_c` | Estimated soil temp (temp_avg - 2°C) |
+| `soil_temp_c` | Estimated soil temp (temp_avg − 2°C) |
 
-#### 6-Month Forecast Generation
+#### 6-Month Forecast Generation (v4.0)
 
-**Strategy:** Zone-based climatology anchored to live temperature.
+**Data source priority (no static tables):**
 
-**Steps:**
-1. Determine climate zone for location (India: `history.py`; World: `_COUNTRY_TO_ZONE` table)
-2. Load monthly averages for that zone (`_ZONE_CLIMATE` table)
-3. Compute live temperature offset: `offset = live_temp - zone_temp_for_current_month`
-4. Apply offset to all 7 forecast months: `adjusted_temp = zone_temp + offset`
+| Priority | Source | Detail |
+|----------|--------|--------|
+| 1 | **Open-Meteo Archive API** (`_fetch_openmeteo_monthly_climatology`) | Real 2-year historical monthly averages for this exact lat/lon — temperature, rainfall, humidity |
+| 2 | **`_llm_generate_forecast()`** | Gemini generates a 6-month forecast from coordinates + country context |
+| 3 | **Empty list** | No static zone tables — honest empty state |
 
-**Climate Zones in `_ZONE_CLIMATE`:**
-```
-Tropical, Subtropical, Arid, Mediterranean, Temperate, Continental,
-Temperate_Americas, Tropical_Americas, Subtropical_S, Arid_Oceania
-```
+**Temperature anchoring:** The live temperature is used to compute an offset (`live_temp − archive_temp_for_current_month`), applied to all 6 forecast months for district-level accuracy.
 
-**Country → Zone Mapping (`_COUNTRY_TO_ZONE`):**
-50+ countries mapped. Latitude-based fallback for unmapped countries:
-- `|lat| < 15°` → Tropical
-- `|lat| < 30°` → Subtropical  
-- `|lat| < 45°` → Temperate
-- `|lat| < 60°` → Continental
+**Fixed in v4.0:** Forecast now correctly returns **exactly 6 months** (was 7 in v3.x due to `timedelta(days=32*i)` iteration bug).
 
-#### ENSO Adjustment (Step 3 of pipeline)
+#### ENSO Adjustment
 
-After building the baseline 6-month forecast, the agent calls `get_climate_signals()` from `climate_signals.py` and then `apply_enso_to_forecast()` to adjust all monthly values.
+After building the baseline forecast, `apply_enso_to_forecast()` from `climate_signals.py` adjusts all monthly values. The `climate_signal` dict is now included in the `gathered` return (was missing in v3.x streaming path).
 
-#### LLM Enrichment (Search-Grounded)
+#### LLM Enrichment — Two-Stage (v4.0)
 
-**Priority:**
-1. **Gemini + Google Search Grounding** — Real current market prices and active advisories
-2. **Gemini plain** — Static LLM knowledge about soil and prices
-3. **Zone defaults** — `_ZONE_SOIL_DEFAULTS` + `_ZONE_MARKET_TEMPLATES` tables
+**Stage 1 — Fast (parallel with weather fetch):**  
+`_llm_enrich_fast(location_str, country, temp, month)` — single Gemini 2.0 Flash Lite call, targets < 8 seconds. Fires in a `ThreadPoolExecutor` while the weather API call completes. Timeout extended to 20 seconds in the streaming endpoint (was 3s in v3.x — too short).
+
+**Stage 2 — Rich (background, post-render):**  
+`/api/enrich-soil` endpoint calls `_llm_enrich()` which tries search-grounded Gemini first. After the dashboard renders, `_bgEnrichSoil()` in `app.js` calls this endpoint and updates the soil card + market prices smoothly.
 
 **What LLM returns:**
 ```json
 {
   "soil": {"type": "Clay-Loam", "ph": 6.5, "organic_matter": "Medium", "drainage": "Good"},
-  "market_prices": {"Wheat": "₹2,400/quintal", "Rice": "₹3,200/quintal"},
+  "market_prices": {"Rice": "₹2,400/quintal", "Wheat": "₹2,100/quintal"},
   "district_summary": "Pune is a major agricultural district...",
   "climate_zone": "Subtropical"
 }
 ```
 
-#### Currency-Aware Market Prices
-
-`_COUNTRY_CURRENCY` maps 30+ countries to their currency symbols (₹, $, €, £, R$, ¥, etc.).  
-`_ZONE_MARKET_TEMPLATES` provides zone-default price templates with `{cur}` placeholders substituted at runtime.
+**If enrichment fails:** Soil shows `type: Unknown, ph: null`. Market prices is `{}`. Frontend shows `🤖 Analyzing...` placeholders. **No static zone-based defaults.**
 
 #### Main Entry Point
 
@@ -287,25 +256,21 @@ def gather_location_data(
     lat: float, lon: float,
     month: Optional[int] = None,
     state_code: Optional[str] = None,
-    llm_climate_zone: Optional[str] = None,
-    llm_crop_notes: Optional[str] = None,
-    location_source: str = "llm",
 ) -> dict:
 ```
 
 **Returns:**
 ```python
 {
-    "current": {...},                    # Live weather
-    "forecast_6month": [...],            # ENSO-adjusted 7-month forecast
-    "forecast_6month_baseline": [...],   # Pre-ENSO baseline
-    "soil": {...},                       # LLM or zone-default soil
-    "season": "Kharif",                 # Detected season
-    "climate_zone": "Subtropical",      # Zone label
-    "market_prices": {...},              # LLM or currency-aware defaults
+    "current": {...},                    # Live weather (null fields if API down)
+    "forecast_6month": [...],            # Archive-based 6-month forecast
+    "soil": {...},                       # LLM-enriched soil (Unknown if failed)
+    "season": "Kharif",                 # LLM-detected season
+    "climate_zone": "Subtropical",      # LLM or lat-based zone
+    "market_prices": {...},              # Search-grounded or {} if failed
     "district_summary": "...",          # LLM 1-sentence description
-    "climate_signal": {...},             # Full climate_signals output
-    "location_source": "database",      # "database" or "llm"
+    "climate_signal": {...},             # Full ENSO + 9-threat signals
+    "location_source": "llm",           # Always "llm" in v4.0
 }
 ```
 
@@ -434,7 +399,7 @@ def apply_enso_to_forecast(forecast_6month: list, climate_signals: dict) -> list
 
 **Purpose:** AI-powered crop ranking for any global location.
 
-**Size:** 794 lines — the most complex agent module.
+**Version 4.0 changes:** All static fallback tables removed. Country-specific crop hint lists removed. Geographic validation simplified.
 
 #### Pipeline (in priority order)
 
@@ -442,60 +407,33 @@ def apply_enso_to_forecast(forecast_6month: list, climate_signals: dict) -> list
 |----------|--------|-------------|
 | 1 | **In-memory cache** | Returns instantly if same `(country, state, district, season, climate, irrigation)` was requested within 1 hour |
 | 2 | **Gemini + Google Search Grounding** | Real-time crop advisories, current pest alerts, live market info |
-| 3 | **Gemini plain** (4-key rotation, model chain) | Static LLM knowledge, full prompt with country hints |
+| 3 | **Gemini plain** (4-key rotation, model chain) | LLM knowledge with full location-aware prompt |
 | 4 | **Ollama + Web Search Tool** | Local LLM with DuckDuckGo tool-calling |
 | 5 | **Ollama plain** | Local LLM, no search |
-| 6 | **Geography-aware zone fallback** | Instant, no API, returns hardcoded but geographically accurate crops |
+| 6 | **`_llm_simple_fallback()`** | Minimal single-shot Gemini prompt — last resort |
+| 7 | **Empty list** | Honest empty state — **no static crop tables** |
 
-#### Country Crop Hints (`_COUNTRY_CROP_HINTS`)
+#### Prompt Structure (`_build_prompt`)
 
-50+ countries with local-language crop names to guide the LLM:
-
-```python
-"germany": "Winterweizen (Winter Wheat), Winterraps (Canola), Zuckerrübe (Sugar Beet), Mais (Maize), Kartoffel (Potato)...",
-"brazil":  "Soja (Soybean), Milho (Maize), Cana-de-açúcar (Sugarcane), Café (Coffee)...",
-"india":   "Chawal/Dhan (Rice), Gehun (Wheat), Kapas (Cotton), Ganna (Sugarcane)...",
-"nigeria": "Rice, Maize, Sorghum, Cassava, Yam, Cowpea, Groundnut...",
-...
-```
-
-Crops included from: Western Europe, Northern Europe, Central/Eastern Europe, Russia/Central Asia, North America, Central/South America, Middle East/North Africa, South Asia, East/Southeast Asia, Africa, Oceania.
-
-#### Geographic Validation (`_validate_crops`)
-
-Detects when Gemini has hallucinated wrong geography (e.g., returns Hindi crop names for Germany):
-
-```python
-_HINDI_CROP_NAMES = {"chawal", "gehun", "makka", "chana", "sarson", "bajra", "jowar", ...}
-_SOUTH_ASIAN_COUNTRIES = {"india", "pakistan", "bangladesh", "nepal", "sri lanka", "bhutan"}
-
-# If ≥2 crops have Hindi local names for a non-South-Asian country → reject, use zone fallback
-```
-
-#### Prompt Structure
-
-The LLM prompt (`_build_prompt()`) includes:
+The LLM prompt includes:
 - Country, state, district, season, climate zone, hemisphere (Northern/Southern)
-- Country-specific crop hints embedded directly
 - Live weather: temperature, humidity, 7-day rainfall
 - 3-month forecast summary
 - Soil type, pH, organic matter, drainage
-- Local market prices
+- Local market prices (from LLM enrichment)
 - District summary (1 sentence)
 - Irrigation level and planning days
 
 **Requested output:** JSON array of 6 crops with fields:
 `crop_name`, `local_name`, `suitability_score` (0-100), `season_fit`, `risk_level`, `duration_days`, `water_need`, `estimated_yield`, `planting_window`, `market_demand`, `reasons[]`, `warnings[]`, `growing_tip`
 
-#### Zone Fallback Tables (`_fallback_crops`)
+#### Geographic Validation (`_validate_crops`)
 
-Geography-aware fallback crop tables indexed by climate zone and hemisphere (never India-only names):
-- **Tropical** — Rice, Maize, Cassava, Sweet Potato, Plantain, Groundnut
-- **Arid/Semi-Arid** — Sorghum, Millet, Sesame, Cowpea, Dates, Cotton
-- **Mediterranean** — Wheat, Olive, Grape, Tomato, Sunflower, Barley
-- **Temperate** — European-specific (Sugar Beet, Winter Wheat, Canola, Potato) vs Americas (Corn, Soybean, Cotton)
-- **Continental** — Wheat, Sunflower, Soybean, Sugar Beet, Canola
-- **Subtropical (South Asia)** — Kharif/Rabi seasonal tables
+In v4.0, validation is simplified — prompts include explicit regional context so hallucination is less likely. The validation layer checks structural correctness (required fields, score ranges) rather than geographic filtering.
+
+#### Simple Fallback (`_llm_simple_fallback`)
+
+When all providers fail, a minimal Gemini prompt asks for 3 crops appropriate for the coordinates and month. If this also fails, returns `[]` — no static table.
 
 #### Caching
 
@@ -637,16 +575,17 @@ class ChatRequest(BaseModel):
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/` | None | Serves the HTML dashboard |
-| `GET` | `/api/countries` | None | Returns sorted country list |
-| `GET` | `/api/states/{country}` | None | Returns states for a country |
-| `GET` | `/api/districts/{country}/{state}` | None | Returns districts for a state |
-| `POST` | `/api/analyze/stream` | None | **Main SSE streaming analysis** |
-| `GET` | `/climate-signals` | None | 9-dimensional climate assessment |
+| `GET` | `/api/countries` | None | Returns sorted country list (195 countries) |
+| `GET` | `/api/states/{country}` | None | Returns states for a country (LLM-generated) |
+| `GET` | `/api/districts/{country}/{state}` | None | Returns districts for a state (LLM-generated) |
+| `POST` | `/api/analyze/stream` | None | **Main SSE streaming analysis** (5-step pipeline) |
+| `GET` | `/api/enrich-soil` | None | **Background soil enrichment** — search-grounded Gemini |
+| `GET` | `/climate-signals` | None | 9-dimensional climate assessment + ENSO |
 | `POST` | `/chat` | None | Single-turn farmer chat |
 | `POST` | `/chat/stream` | None | Streaming farmer chat (SSE) |
 | `GET` | `/weather/now/{region_id}` | None | Live temperature from Open-Meteo |
-| `POST` | `/recommend` | None | Legacy batch JSON recommendation |
-| `GET` | `/health` | None | System health and provider info |
+| `POST` | `/recommend` | None | Legacy batch JSON recommendation (v2.x) |
+| `GET` | `/health` | None | System health, version, LLM provider info |
 | `GET` | `/docs` | None | Auto-generated Swagger UI |
 | `GET` | `/redoc` | None | ReDoc API documentation |
 
@@ -743,23 +682,25 @@ evtSource.onmessage = (event) => {
 
 ### 6.3 Climate Intelligence Panel (`renderClimatePanel`)
 
-The Climate Intelligence Panel is rendered dynamically from the `climate_signals` SSE event:
+The Climate Intelligence Panel is rendered dynamically from the `climate_signals` SSE event or the `gathered.climate_signal` dict in the final `done` event. It shows ENSO badge, threat tiles, alert bar, AI summary, rainfall/temp outlook, crop risks, immediate actions, and forecast adjustment description.
+
+### 6.4 Background Soil Enrichment
+
+After `renderDashboard()` renders the initial result, `_bgEnrichSoil(loc, current, gathered)` fires automatically:
 
 ```javascript
-function renderClimatePanel(signals) {
-    // ENSO phase badge with color coding
-    // ONI value display
-    // Threat badges: heat, drought, frost, wildfire, cyclone
-    // Alert level banner (None/Advisory/Watch/Warning/Emergency)
-    // AI summary text (3 sentences from Gemini)
-    // Rainfall outlook badge
-    // Temp outlook badge
-    // Crop risks list
-    // Immediate actions list
-    // Forecast adjustment description
-    // Data freshness and source attribution
+async function _bgEnrichSoil(loc, current, gathered) {
+    // Calls GET /api/enrich-soil?district=...&state=...&country=...&temp=...&month=...
+    // On success, calls _updateSoilCard(soil, market, summary)
+    // _updateSoilCard() only updates cells still showing '🤖 Analyzing...'
+    // Updates animate with fadeIn CSS transition
 }
 ```
+
+This ensures:
+1. **Fast first render** — `_llm_enrich_fast()` data shown immediately (soil may be `Unknown` if LLM was slow)
+2. **Rich update** — Search-grounded Gemini data arrives 10-20s later and updates the soil card smoothly
+3. **No re-render** — Only the specific soil/market cells that need updating are changed
 
 ---
 
@@ -767,37 +708,33 @@ function renderClimatePanel(signals) {
 
 ### 7.1 World Locations (`data/reference/world_locations.json`)
 
-**Coverage:** 50+ countries, 250+ states, 170+ districts  
-**Format:** Hierarchical JSON with lat/lon, ISO codes, and metadata  
-**Usage:** Primary resolver in `location_agent.py`
+**Coverage:** Legacy reference file — 50+ countries, 250+ states, 170+ districts  
+**Usage in v4.0:** Not used for primary resolution. All states and districts are resolved by `llm_location_agent.py` via Gemini/Ollama.
 
 ### 7.2 Crop Knowledge Database (`data/reference/crop_knowledge.json`)
 
-**Purpose:** Core LLM context for crop filtering (`llm_filter.py`) and fallback rules  
-**Contents:** 50+ crops with:
-- Temperature ranges (optimal, minimum, maximum)
-- Water requirements
-- Suitable soil types and pH ranges
-- Growing seasons
-- Duration (days)
-- Regional suitability modifiers
-- Known pests and diseases
+**Purpose:** LLM context for `llm_filter.py` and legacy rule-based scoring  
+**Contents:** 50+ crops with temperature ranges, water requirements, soil types, growing seasons, durations, regional modifiers, pest/disease info.
 
-### 7.3 Climate Zone Tables (`data_gathering_agent.py` inline)
+### 7.3 Open-Meteo Archive API (replaces Climate Zone Tables)
 
-Monthly climate data for each zone — 12 months × 5 parameters:
+**v4.0 change:** The static `_ZONE_CLIMATE` dict (120 cells of approximated monthly data) has been replaced by the **Open-Meteo Archive API**.
 
-```python
-_ZONE_CLIMATE = {
-    "Tropical": {
-        1: {"temp": 28, "temp_max": 33, "temp_min": 22, "rain": 45, "hum": 82},
-        ...
-    },
-    "Temperate": {...},
-    "Continental": {...},
-    ...
-}
-```
+**API:** `https://archive-api.open-meteo.com/v1/archive`  
+**Data:** 2 years of daily historical data (`temperature_2m_max`, `temperature_2m_min`, `precipitation_sum`, `relative_humidity_2m_mean`)  
+**Aggregation:** Averaged per calendar month across both years to produce 12 monthly data points per lat/lon  
+**Cache:** 30-minute in-memory cache per `(lat, lon)` key
+
+This provides **real per-district climate data** rather than zone-wide approximations. A location in coastal Maharashtra gets different values from an inland Maharashtra location — something the old zone tables could never provide.
+
+### 7.4 LLM-Driven Market Prices (replaces Market Price Templates)
+
+**v4.0 change:** `_ZONE_MARKET_TEMPLATES` and `_COUNTRY_CURRENCY` removed. Market prices now come exclusively from:
+1. **Gemini Search Grounding** — searches for current local crop prices in local currency
+2. **Plain Gemini** — uses training knowledge of typical crop prices for the region
+3. **`{}`** — empty dict if both fail (no template-based fake prices)
+
+### 7.5 Legacy Data (v2.x)
 
 ### 7.4 Market Price Templates (`data_gathering_agent.py` inline)
 
