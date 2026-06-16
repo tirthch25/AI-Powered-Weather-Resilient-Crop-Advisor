@@ -86,7 +86,7 @@ The **AI Powered Weather Resilient Crop Advisor v3.1** is a globally scalable, a
 
 | Goal | Implementation |
 |------|---------------|
-| **Global Scale** | Dynamically resolve any global farm location via static DB or LLM geocoding |
+| **Global Scale** | Dynamically resolve any global farm location via 195-country ISO list + 100% LLM-driven state and district resolution (24h cache) |
 | **Agentic AI** | 6-agent pipeline with specialized roles: Location, LLM-Location, Data, Climate, Crop, Web-Search |
 | **Real-Time Context** | Open-Meteo live weather + NOAA ENSO + Gemini Search Grounding for current advisories |
 | **Climate Resilience** | 9 climate threat assessors + ENSO-adjusted 6-month forecasts |
@@ -108,8 +108,8 @@ flowchart TD
     end
 
     subgraph L3["🧠  AGENTIC INTELLIGENCE (v3.1)"]
-        LA["📍 <b>Location Agent</b><br/>world_locations.json<br/>50+ Countries, 250+ States<br/>170+ Districts"]
-        LLA["🗺️ <b>LLM Location Agent</b><br/>Gemini/Ollama geocoder<br/>for unmapped rural locations"]
+        LA["📍 <b>Location Agent</b><br/>195 UN countries (ISO hardcoded)<br/>States: 100% LLM via llm_location_agent<br/>Districts: 100% LLM via llm_location_agent<br/>Coords embedded in LLM response<br/>24-hour in-memory cache"]
+        LLA["🗺️ <b>LLM Location Agent</b><br/>llm_get_states() per country<br/>llm_get_districts() per state<br/>llm_resolve_coords() for coord lookup<br/>Gemini (4-key rotation) + Ollama fallback"]
         DGA["🌦️ <b>Data Gathering Agent</b><br/>• Open-Meteo (live wx, 30-min cache)<br/>• 6-month forecast (zone + live anchor)<br/>• ENSO adjustment (climate_signals.py)<br/>• Soil + Market (Search Grounding)"]
         CSI["🌐 <b>Climate Signal Intelligence</b><br/>• NOAA ONI (ENSO phase)<br/>• Heat Stress assessor<br/>• Drought Index<br/>• Frost Risk<br/>• Flood Detection<br/>• Cyclone Basin tracking<br/>• Wildfire Risk<br/>• Gemini Search Grounding"]
         CA["🌱 <b>Crop Agent</b><br/>Cache → Gemini+Search → Gemini<br/>→ Ollama+Search → Ollama<br/>→ Zone Fallback<br/>Country Crop Hint Validation"]
@@ -140,45 +140,32 @@ flowchart TD
 
 ### 3.1 Location Agent (`location_agent.py`)
 
-**Purpose:** Primary geographic resolver using static world_locations.json database.
+**Purpose:** Country list and gateway to LLM-driven geographic resolution.
+
+**Architecture:** 100% LLM-driven for states and districts — no static `world_locations.json` lookup in v3.1.
 
 **Coverage:**
-- 50+ countries mapped with ISO codes
-- 250+ states/provinces with regional data
-- 170+ districts with exact latitude/longitude
+- **Countries:** All 195 UN-recognised countries — ISO 3166-1 alpha-2 list hardcoded directly in the agent (`ALL_195_COUNTRIES`). Never stale.
+- **States/Provinces:** Always resolved by `llm_location_agent.llm_get_states()` — returns the real, complete list (e.g. all 16 German Bundesländer, all 47 Japanese prefectures, all 36 Nigerian states)
+- **Districts:** Always resolved by `llm_location_agent.llm_get_districts()` — any district in any country, including rural and unmapped areas
+- **Coordinates:** Embedded in LLM response, or fetched via `llm_resolve_coords()` as a secondary call
+
+**Caching:** States and districts are cached 24 hours in `llm_location_agent._CACHE` so repeated lookups are instant.
 
 **Key Functions:**
 
 | Function | Description |
 |----------|-------------|
-| `resolve_location(country, state, district)` | Returns `(lat, lon, state_code)` from static DB |
-| `get_countries()` | Returns sorted list of all supported countries |
-| `get_states(country)` | Returns states for a given country |
-| `get_districts(country, state)` | Returns districts for a given state |
+| `get_countries()` | Returns all 195 countries from hardcoded ISO list |
+| `get_states(country_code)` | Calls `llm.llm_get_states()` — full LLM state list, cached 24h |
+| `get_districts(country_code, state_code)` | Calls `llm.llm_get_districts()` — full LLM district list |
+| `resolve_coordinates(country, state, district)` | Extracts lat/lon from LLM district response |
+| `resolve_full(country, state, district)` | Full resolve: lat, lon, climate_zone, crop_notes |
 
-**Fallback Logic:**
-1. Exact district match → return district lat/lon
-2. State capital match → return state capital coordinates
-3. Country centroid → return country-level coordinates
-4. None found → delegate to **LLM Location Agent**
-
-**Data File:** `data/reference/world_locations.json`
-
-```json
-{
-  "india": {
-    "states": {
-      "maharashtra": {
-        "lat": 19.7515, "lon": 75.7139,
-        "districts": {
-          "pune": {"lat": 18.5204, "lon": 73.8567},
-          "nashik": {"lat": 19.9975, "lon": 73.7898}
-        }
-      }
-    }
-  }
-}
-```
+**Fallback Chain:**
+1. LLM district list (coords embedded) →
+2. `llm_resolve_coords()` dedicated call →
+3. State centre coordinates
 
 ---
 

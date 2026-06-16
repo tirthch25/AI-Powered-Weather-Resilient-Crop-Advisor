@@ -535,17 +535,20 @@ python scripts/verify_models.py
 
 ```text
 data/reference/
-├── world_locations.json    ← REQUIRED: Global coordinate resolver (50+ countries)
-└── crop_knowledge.json     ← REQUIRED: Core crop database (50+ crops, LLM context)
-
-src/services/
-└── climate_signals.py      ← v3.1: 9-dimensional NOAA ENSO + AI interpretation
+├── world_locations.json  (Legacy reference — superseded by LLM agent in v3.1)
+└── crop_knowledge.json   (Core LLM Context Database, 50+ crops)
 
 src/agents/
-├── data_gathering_agent.py ← Updated: includes ENSO adjustment + Search Grounding
-├── crop_agent.py           ← Updated: Search Grounding + country crop hints
-├── llm_location_agent.py   ← v3.0: LLM geocoder for unmapped locations
-└── web_search_agent.py     ← v3.1: DuckDuckGo tool for Ollama
+├── location_agent.py       (195 UN countries ISO list; states + districts 100% LLM-driven)
+├── llm_location_agent.py   (Gemini/Ollama: states, districts, coords — 24h cache)
+└── data_gathering_agent.py  (Updated — Step 3 now includes ENSO adjustment)
+
+src/services/
+└── climate_signals.py      (9-dimensional climate threat assessment — NOAA + Gemini Search)
+
+src/agents/ (also important)
+├── crop_agent.py           (AI crop ranking — Search Grounding + country crop hints)
+└── web_search_agent.py     (DuckDuckGo tool for Ollama)
 ```
 
 ### Legacy Files (Maintained for Fallback)

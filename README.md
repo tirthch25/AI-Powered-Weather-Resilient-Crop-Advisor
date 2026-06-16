@@ -7,11 +7,12 @@
 ![LLaMA](https://img.shields.io/badge/LLaMA-3.2%20Local-8A2BE2?style=for-the-badge)
 ![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-black?style=for-the-badge)
 ![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?style=for-the-badge&logo=google)
+![Coverage](https://img.shields.io/badge/Coverage-195%20Countries-brightgreen?style=for-the-badge)
 ![NOAA](https://img.shields.io/badge/NOAA-Climate%20Signals-0057B7?style=for-the-badge)
 ![HTML5](https://img.shields.io/badge/HTML5-Vanilla_JS-E34F26?style=for-the-badge&logo=html5)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**An AI-Powered, Weather-Resilient Crop Advisor powered by LLaMA & Gemini Search-Grounded Agents — covering 50+ countries, 250+ states, and 170+ districts, with real-time ENSO / El Niño / La Niña climate intelligence and 9-dimensional climate threat assessment.**
+**An AI-Powered, Weather-Resilient Crop Advisor powered by LLaMA & Gemini Search-Grounded Agents — covering all 195 UN-recognised countries with 100% LLM-driven state and district resolution, real-time ENSO / El Niño / La Niña climate intelligence, and 9-dimensional climate threat assessment.**
 
 [Overview](#-overview) • [Agent Architecture](#-agent-architecture) • [Climate Intelligence](#-climate-signal-intelligence-v31) • [Features](#-features) • [Installation](#-installation) • [API Endpoints](#-api-endpoints) • [User Module](#-user-module)
 
@@ -21,7 +22,7 @@
 
 ## 🧭 Overview
 
-The **AI Powered Weather Resilient Crop Advisor** is an end-to-end, global agricultural intelligence platform. By combining live weather data, machine-learning-blended climate forecasts, real-time ENSO signals, comprehensive climate threat assessment, and large language model (LLM) reasoning with **Google Search Grounding**, the system replicates the advice of a skilled agronomist for virtually any farming region in the world.
+The **AI Powered Weather Resilient Crop Advisor** is an end-to-end, global agricultural intelligence platform covering all **195 UN-recognised countries**. By combining live satellite-quality weather data, real-time ENSO signals, comprehensive 9-dimensional climate threat assessment, and LLM agents with **Google Search Grounding**, the system replicates the advice of a skilled agronomist for virtually any farming region in the world.
 
 A user selects their country, state, and district. The system instantly runs a **5-agent pipeline**:
 1. **Location Agent** — Resolves exact latitude/longitude for any global location
@@ -42,7 +43,7 @@ Most crop advisory tools rely on generic, static lookup tables or expensive IoT 
 
 | Principle | Implementation |
 |-----------|----------------|
-| **Global Precision** | Location Agent dynamically maps 170+ global districts. Open-Meteo fetches real-time, exact lat/lon weather. LLM Location Agent handles unmapped rural locations. |
+| **Global Precision** | Location Agent covers **all 195 UN countries**. States and districts are resolved 100% dynamically by the LLM (Gemini/Ollama) — no stale static JSON, always complete and accurate. Results cached 24 hours. |
 | **Climate Intelligence** | NOAA CPC ONI data (free) reveals El Niño/La Niña phase; 9 independent climate threat assessors (ENSO, heat, drought, frost, flood, cyclone, wildfire, soil moisture, climate change) run in parallel. |
 | **Search-Grounded AI** | Gemini + Google Search Grounding provides real-time crop advisories, current market prices, and active pest/disease alerts for any location. |
 | **Agentic Workflow** | Multi-agent system (Location, LLM-Location, Data, Climate, Crop, Web-Search, Chat) orchestrates intelligence behind a single `/api/analyze/stream` call. |
@@ -69,14 +70,15 @@ Most crop advisory tools rely on generic, static lookup tables or expensive IoT 
    │                                  │                  │
 ┌──▼──────────────────┐  ┌────────────▼──────────┐  ┌───▼──────────────────────┐
 │  Location Agent     │  │  Data Gathering Agent │  │  Climate Signal Service  │
-│  world_locations.   │  │  • Open-Meteo live wx │  │  • NOAA ONI (ENSO)       │
-│  json               │  │  • 6-month forecast   │  │  • Heat Stress           │
-│  50+ Countries      │  │  • ENSO adjustment    │  │  • Drought Index         │
-│  250+ States        │  │  • Soil + Market LLM  │  │  • Frost Assessment      │
-│  170+ Districts     │  │  • Search grounding   │  │  • Flood Risk            │
-│                     │  │                       │  │  • Cyclone Basin         │
-│  LLM Location Agent │  │  Web Search Agent     │  │  • Wildfire Risk         │
-│  (unmapped rural)   │  │  (DuckDuckGo tool)    │  │  • Gemini Search AI      │
+│  195 Countries      │  │  • Open-Meteo live wx │  │  • NOAA ONI (ENSO)       │
+│  (ISO hardcoded)    │  │  • 6-month forecast   │  │  • Heat Stress           │
+│                     │  │  • ENSO adjustment    │  │  • Drought Index         │
+│  LLM Location Agent │  │  • Soil + Market LLM  │  │  • Frost Assessment      │
+│  All states via LLM │  │  • Search grounding   │  │  • Flood Risk            │
+│  All districts via  │  │                       │  │  • Cyclone Basin         │
+│  LLM (24h cache)    │  │  Web Search Agent     │  │  • Wildfire Risk         │
+│  Coords embedded in │  │  (DuckDuckGo tool)    │  │  • Gemini Search AI      │
+│  LLM response       │  │                       │  │                          │
 └──┬──────────────────┘  └────────────┬──────────┘  └──────────────────────────┘
    │                                  │
 ┌──▼──────────────────────────────────▼──────────────────────────────────────┐
@@ -149,7 +151,7 @@ GET /climate-signals?country=india&state=Maharashtra&district=Pune&climate_zone=
 ```
 
 Returns full 9-dimensional threat assessment:
-- `enso_phase` — El Nino / La Nina / Neutral / Watch
+- `enso_phase` — El Nino / La Niña / Neutral / Watch
 - `oni_value` — Oceanic Niño Index (°C)
 - `phase_label` — Human-readable label with strength
 - `threats` — Object with heat_stress, drought, frost, wildfire, cyclone sub-objects
@@ -281,10 +283,13 @@ If Gemini returns incorrect crops for a country (e.g., Hindi names for a Europea
 
 ## ✨ Features
 
-### 🌍 Global Location Support
-- **50+ countries**, **250+ states/provinces**, and **170+ districts** in `world_locations.json`
-- **LLM Location Agent** geocodes rural/unmapped locations on-the-fly via Gemini/Ollama
-- Fallback to state capital coordinates if district is unknown
+### 🌍 True Global Location Support — All 195 Countries
+- **All 195 UN-recognised countries** — ISO 3166-1 hardcoded list, never stale
+- **States/provinces: 100% LLM-driven** — Gemini/Ollama returns the real, complete administrative division list for every country
+- **Districts: 100% LLM-driven** — any district in any country resolved on-the-fly, including rural and unmapped areas
+- **Coordinates** — embedded in the LLM response; secondary `llm_resolve_coords()` call if not included
+- **24-hour in-memory cache** — repeated state/district lookups for the same country are instant
+- **Fallback chain**: LLM district list → dedicated coord resolve → state centre
 
 ### 🌐 Climate Signal Intelligence (v3.1)
 - Real-time **El Niño / La Niña** status from NOAA CPC (free, no API key)
@@ -489,7 +494,7 @@ AI-Powered-Weather-Resilient-Crop-Advisor/
     ├── .env.example               # Environment variable template (with docs)
     ├── data/
     │   └── reference/
-    │       ├── world_locations.json    # 50+ countries, 250+ states, 170+ districts
+    │       ├── world_locations.json    # Legacy reference (superseded by LLM agent)
     │       ├── crop_knowledge.json     # Crop database (50+ crops, LLM context)
     │       ├── regions.json            # Legacy: India 640-district database
     │       └── regional_crops.json    # Legacy: India regional crop data
@@ -503,8 +508,8 @@ AI-Powered-Weather-Resilient-Crop-Advisor/
     │   └── verify_models.py            # ML model verification
     ├── src/
     │   ├── agents/
-    │   │   ├── location_agent.py       # World location resolver (world_locations.json)
-    │   │   ├── llm_location_agent.py   # LLM geocoder for unmapped locations
+    │   │   ├── location_agent.py       # 195 UN countries (ISO list); all states/districts via LLM
+    │   │   ├── llm_location_agent.py   # Gemini/Ollama: states, districts, coords (24h cache)
     │   │   ├── data_gathering_agent.py # Weather + forecast + ENSO + soil + market
     │   │   ├── crop_agent.py           # AI crop ranking with Search Grounding
     │   │   └── web_search_agent.py     # DuckDuckGo tool for Ollama search
