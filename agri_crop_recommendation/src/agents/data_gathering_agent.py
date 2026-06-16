@@ -154,11 +154,11 @@ _COUNTRY_TO_ZONE: Dict[str, str] = {
     "sudan": "Arid", "iraq": "Arid", "iran": "Arid", "saudi arabia": "Arid",
     # Temperate
     "germany": "Temperate", "france": "Temperate", "united kingdom": "Temperate",
-    "poland": "Temperate", "ukraine": "Temperate", "romania": "Temperate",
+    "poland": "Temperate", "romania": "Temperate",
     "italy": "Mediterranean", "spain": "Mediterranean", "portugal": "Mediterranean",
     "greece": "Mediterranean", "turkey": "Mediterranean",
     # Continental (hot summers, cold winters)
-    "russia": "Continental", "china": "Continental", "ukraine": "Continental",
+    "russia": "Continental", "china": "Continental", "ukraine": "Continental",  # Continental for hot summers / cold winters
     # Americas
     "united states": "Temperate_Americas", "canada": "Temperate_Americas",
     "mexico": "Subtropical", "brazil": "Tropical_Americas",
