@@ -148,7 +148,8 @@ _COUNTRY_TO_ZONE: Dict[str, str] = {
     "côte d'ivoire": "Tropical", "uganda": "Tropical", "tanzania": "Tropical",
     "ethiopia": "Tropical", "kenya": "Tropical",
     # Subtropical / Semi-Arid
-    "pakistan": "Subtropical", "nepal": "Subtropical", "afghanistan": "Subtropical",
+    "pakistan": "Subtropical", "nepal": "Subtropical",
+    "afghanistan": "Continental",  # High-altitude semi-arid mountain climate — NOT subtropical
     "egypt": "Arid", "morocco": "Mediterranean", "tunisia": "Mediterranean",
     "sudan": "Arid", "iraq": "Arid", "iran": "Arid", "saudi arabia": "Arid",
     # Temperate
