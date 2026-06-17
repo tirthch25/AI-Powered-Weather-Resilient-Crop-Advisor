@@ -65,7 +65,7 @@ app = FastAPI(
     description="Global crop advisor powered by LLaMA + Ollama web search agents. "
                 "Supports 50+ countries, 250+ states, 170+ districts. "
                 "Agent gathers real-time weather, soil, forecast & market data.",
-    version="3.0"
+    version="4.0"
 )
 
 
@@ -1095,7 +1095,7 @@ def api_analyze(request: AnalyzeRequest):
             "gathered_data":     gathered,
             "recommended_crops": crops,
             "agent":             "llama3.2 + gemini",
-            "version":           "3.1",
+            "version":           "4.0",
         }
 
     except HTTPException:
