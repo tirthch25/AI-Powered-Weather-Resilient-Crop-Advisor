@@ -56,7 +56,7 @@
 
 ## 1. Project Overview
 
-The **AI Powered Weather Resilient Crop Advisor v3.1** is a globally scalable, agentic agricultural advisory web application. It combines live satellite-quality weather data, real-time ENSO climate signals, comprehensive 9-dimensional climate threat assessment, and LLM agents with Google Search Grounding to replicate the advice of an experienced agronomist for any farming region in the world.
+The **AI Powered Weather Resilient Crop Advisor v4.0** is a globally scalable, agentic agricultural advisory web application. It combines live satellite-quality weather data, real-time ENSO climate signals, comprehensive 9-dimensional climate threat assessment, and LLM agents with Google Search Grounding to replicate the advice of an experienced agronomist for any farming region in the world.
 
 ### 1.1 Evolution from Prior Versions
 
@@ -92,12 +92,12 @@ flowchart TD
         API["<b>POST /api/analyze/stream</b> (SSE)<br/><b>POST /chat/stream</b> (SSE)<br/><b>GET /climate-signals</b><br/><b>GET /api/countries|states|districts</b><br/><b>GET /health</b>"]
     end
 
-    subgraph L3["🧠  AGENTIC INTELLIGENCE (v3.1)"]
+    subgraph L3["🧠  AGENTIC INTELLIGENCE (v4.0)"]
         LA["📍 <b>Location Agent</b><br/>195 UN countries (ISO hardcoded)<br/>States: 100% LLM via llm_location_agent<br/>Districts: 100% LLM via llm_location_agent<br/>Coords embedded in LLM response<br/>24-hour in-memory cache"]
         LLA["🗺️ <b>LLM Location Agent</b><br/>llm_get_states() per country<br/>llm_get_districts() per state<br/>llm_resolve_coords() for coord lookup<br/>Gemini (4-key rotation) + Ollama fallback"]
         DGA["🌦️ <b>Data Gathering Agent</b><br/>• Open-Meteo (live wx, 30-min cache)<br/>• 6-month forecast (zone + live anchor)<br/>• ENSO adjustment (climate_signals.py)<br/>• Soil + Market (Search Grounding)"]
         CSI["🌐 <b>Climate Signal Intelligence</b><br/>• NOAA ONI (ENSO phase)<br/>• Heat Stress assessor<br/>• Drought Index<br/>• Frost Risk<br/>• Flood Detection<br/>• Cyclone Basin tracking<br/>• Wildfire Risk<br/>• Gemini Search Grounding"]
-        CA["🌱 <b>Crop Agent</b><br/>Cache → Gemini+Search → Gemini<br/>→ Ollama+Search → Ollama<br/>→ Zone Fallback<br/>Country Crop Hint Validation"]
+        CA["🌱 <b>Crop Agent</b><br/>Cache → Gemini+Search → Gemini<br/>→ Ollama+Search → Ollama<br/>→ _llm_simple_fallback → Empty list<br/>(No static zone tables)"]
         WSA["🔍 <b>Web Search Agent</b><br/>DuckDuckGo tool for Ollama<br/>when Gemini not available"]
     end
 
@@ -119,7 +119,7 @@ flowchart TD
 
 ---
 
-## 3. Agent Modules (v3.1)
+## 3. Agent Modules (v4.0)
 
 **Location:** `agri_crop_recommendation/src/agents/`
 
@@ -127,7 +127,7 @@ flowchart TD
 
 **Purpose:** Country list and gateway to LLM-driven geographic resolution.
 
-**Architecture:** 100% LLM-driven for states and districts — no static `world_locations.json` lookup in v3.1.
+**Architecture:** 100% LLM-driven for states and districts — no static `world_locations.json` lookup in v4.0.
 
 **Coverage:**
 - **Countries:** All 195 UN-recognised countries — ISO 3166-1 alpha-2 list hardcoded directly in the agent (`ALL_195_COUNTRIES`). Never stale.
@@ -913,7 +913,7 @@ When all LLM calls fail, crops are returned from hardcoded zone-specific tables:
 
 ---
 
-## 12. Data Flow Diagram (v3.1)
+## 12. Data Flow Diagram (v4.0)
 
 ```
 FARMER INPUT (Web Form: Country, State, District, Irrigation, Soil, Days)
@@ -922,39 +922,54 @@ FARMER INPUT (Web Form: Country, State, District, Irrigation, Soil, Days)
 POST /api/analyze/stream (FastAPI SSE endpoint)
         │
         ├──[1]── Location Agent (location_agent.py)
-        │        → world_locations.json lookup
-        │        → If not found: LLM Location Agent (llm_location_agent.py)
-        │        → Returns: lat, lon, state_code
+        │        → 195 UN-recognised countries (ISO hardcoded list)
+        │        → LLM Location Agent (llm_location_agent.py) — 100% LLM state/district
+        │        → Returns: lat, lon, state_code (coords embedded in LLM response)
+        │        → 24-hour in-memory cache per country/state
         │
-        ├──[2]── Data Gathering Agent (data_gathering_agent.py)
-        │        ├─ Open-Meteo API → current weather (30-min cache)
-        │        ├─ Zone climatology → 6-month baseline forecast
+        ├──[2]── PARALLEL: Weather Fetch + AI Enrichment
+        │        Thread A: Open-Meteo Current API → live weather (30-min cache)
+        │        │         Fallback: _llm_estimate_current_weather() → LLM estimate
+        │        Thread B: _llm_enrich_fast() → Gemini 2.0 Flash Lite (~5-8s)
+        │                  → soil type, pH, drainage, market prices (parallel)
+        │
+        ├──[3]── 6-Month Forecast (Open-Meteo Archive API)
+        │        ├─ Real 2-year historical monthly averages per lat/lon (NO zone tables)
+        │        ├─ Anchored to live temperature offset
         │        ├─ Climate Signals (climate_signals.py)
-        │        │   ├─ NOAA CPC ONI → ENSO phase
-        │        │   ├─ 8 local threat assessors (heat, drought, frost, etc.)
+        │        │   ├─ NOAA CPC ONI → ENSO phase (fetched every 6h)
+        │        │   ├─ 9 local threat assessors (heat, drought, frost, flood,
+        │        │   │   cyclone, wildfire, soil moisture, ENSO, climate change)
         │        │   └─ Gemini Search Grounding → regional advisories
-        │        ├─ apply_enso_to_forecast() → adjusted 6-month
-        │        └─ LLM Enrichment (Gemini Search → Gemini → zone defaults)
-        │            → soil type, market prices, district summary
+        │        └─ apply_enso_to_forecast() → ENSO-adjusted 6-month forecast
         │
-        ├──[3]── Crop Agent (crop_agent.py)
-        │        ├─ Cache check
-        │        ├─ Gemini + Search Grounding → real-time crop advisories
+        ├──[4]── Collect AI Enrichment (timeout: 20s)
+        │        → Soil + Market data from Thread B (_llm_enrich_fast)
+        │        → If fast enrichment fails: shows 🤖 Analyzing... (no zone defaults)
+        │
+        ├──[5]── Crop Agent (crop_agent.py)
+        │        ├─ In-memory cache (1h)
+        │        ├─ Gemini + Google Search Grounding → real-time advisories
         │        ├─ Gemini plain (4 keys × 6 models)
         │        ├─ Ollama + DuckDuckGo Web Search (web_search_agent.py)
         │        ├─ Ollama plain
-        │        └─ Geography-aware zone fallback
+        │        ├─ _llm_simple_fallback() → minimal Gemini call
+        │        └─ Empty list (NO static zone crop tables)
         │
-        └──[4]── Stream Output (FastAPI StreamingResponse)
-                 │
-                 ▼ SSE events:
-                 weather → climate_signals → soil → market →
-                 forecast → crops → summary → done
+        ├──[6]── Stream Output (FastAPI StreamingResponse)
+        │        ▼ SSE events:
+        │        step1 (location) → step2 (weather) → step3 (forecast)
+        │        → step4 (soil+market) → step5 (crops) → done (full JSON)
+        │
+        └──[BACKGROUND]── GET /api/enrich-soil (fires after dashboard renders)
+                 → _llm_enrich() — search-grounded Gemini enrichment
+                 → _updateSoilCard() — smooth fadeIn update in UI
                  │
                  ▼
         REAL-TIME STREAMING DASHBOARD (app.js)
         Renders: Weather Card, Climate Panel, Forecast Chart,
                  Market Card, Crop Rankings
+        Background: Soil card updates smoothly via _bgEnrichSoil()
 ```
 
 ---
@@ -1060,7 +1075,7 @@ GET /health
 
 → {
     "status": "healthy",
-    "version": "3.1",
+    "version": "4.0",
     "regions_loaded": true,
     "ml_models": {"crop_suitability": true, "weather_lstm": false, "xgboost": false},
     "llm_available": true,
@@ -1131,6 +1146,6 @@ GET /health
 
 ---
 
-*End of User Module Paper — AI Powered Weather Resilient Crop Advisor v3.1*  
+*End of User Module Paper — AI Powered Weather Resilient Crop Advisor v4.0*  
 *Prepared by Tirth Chankeshwara | HPC Group | CDAC-Pune | June 2026*  
 *Repository: https://github.com/tirthch25/AI-Powered-Weather-Resilient-Crop-Advisor*

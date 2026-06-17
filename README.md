@@ -180,7 +180,7 @@ If both fail: soil shows `🤖 Analyzing...`, market shows "data being gathered"
 
 ## 🌐 Climate Signal Intelligence
 
-Version 3.1+ adds a full **9-Dimensional Climate Intelligence** layer via NOAA + Gemini Search.
+Version 3.1+ (and v4.0) adds a full **9-Dimensional Climate Intelligence** layer via NOAA + Gemini Search.
 
 ### 9 Climate Threat Dimensions
 
