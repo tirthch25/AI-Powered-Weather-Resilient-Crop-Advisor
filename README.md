@@ -79,7 +79,7 @@ Soil fields that are still loading show `🤖 Analyzing...` and update when back
 
 ---
 
-## 🤖 Agent Architecture
+## 🏗️ System Architecture
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -92,44 +92,40 @@ Soil fields that are still loading show `🤖 Analyzing...` and update when back
 ┌─────────────────────────────▼────────────────────────────────────────────────┐
 │                           API LAYER (v4.0)                                   │
 │  GET /api/countries · GET /api/states · GET /api/districts                   │
-│  POST /api/analyze/stream · GET /api/enrich-soil (NEW)                       │
+│  POST /api/analyze/stream · GET /api/enrich-soil                             │
 │  POST /chat · POST /chat/stream · GET /climate-signals · GET /health         │
 └──┬──────────────────────────────────┬──────────────────┬─────────────────────┘
    │                                  │                  │
 ┌──▼──────────────────┐  ┌────────────▼──────────┐  ┌───▼──────────────────────┐
 │  Location Agent     │  │  Data Gathering Agent │  │  Climate Signal Service  │
-│  195 Countries      │  │  • Open-Meteo live wx │  │  • NOAA ONI (ENSO)       │
-│  (ISO hardcoded)    │  │  • Archive API clim.  │  │  • Heat Stress           │
-│                     │  │  • 6-month forecast   │  │  • Drought Index         │
-│  LLM Location Agent │  │  • _llm_enrich_fast   │  │  • Frost Assessment      │
-│  All states via LLM │  │    (parallel, ~5-8s)  │  │  • Flood Risk            │
-│  All districts via  │  │  • Background search  │  │  • Cyclone Basin         │
-│  LLM (24h cache)    │  │    grounded enrich    │  │  • Wildfire Risk         │
-│  Coords embedded in │  │  • No static tables   │  │  • Gemini Search AI      │
-│  LLM response       │  │                       │  │                          │
+│  • 195 Countries    │  │  • Open-Meteo live wx │  │  • NOAA ONI (ENSO)       │
+│  • LLM Location     │  │  • Archive API clim.  │  │  • 9 Threat Assessors    │
+│    (States/Dist)    │  │  • 6-month forecast   │  │  • Gemini Search AI      │
+│  • Coords embedded  │  │  • _llm_enrich_fast   │  │                          │
+│  • 24h memory cache │  │  • Background enrich  │  │                          │
 └──┬──────────────────┘  └────────────┬──────────┘  └──────────────────────────┘
    │                                  │
 ┌──▼──────────────────────────────────▼──────────────────────────────────────┐
-│                          CROP AGENT (LLM — v4.0)                            │
-│  Priority: Cache → Gemini+Search → Gemini Plain → Ollama+Search → Ollama   │
-│  Fallback: _llm_simple_fallback() → empty list (NO static tables)           │
-│  Prompt: dynamic region context, live weather, real forecast data            │
+│                            CROP AGENT (v4.0)                               │
+│  Cache → Gemini+Search → Gemini Plain → Ollama+Search → Ollama → Empty     │
+│  Web Search Agent: DuckDuckGo tool for Ollama fallback                     │
 └──┬─────────────────────────────────────────────────────────────────────────┘
    │
 ┌──▼──────────────────────────────────────────────────────────────────────────┐
-│                             LLM LAYER                                        │
-│  Primary:  LLaMA 3.2 via Ollama (local, free, private)                     │
-│  Fallback: Google Gemini (4-key rotation, model fallback chain)             │
-│  Fast:     gemini-2.0-flash-lite (soil enrichment, parallel path)           │
-│  Search:   Google Search Grounding (advisories, market prices, soil)        │
+│                            CHAT & EXPLAIN                                  │
+│  LLM Farmer Chat (llm_chat.py)  ·  LLM Explainer (llm_explainer.py)        │
 └──┬──────────────────────────────────────────────────────────────────────────┘
    │
 ┌──▼──────────────────────────────────────────────────────────────────────────┐
-│                            DATA LAYER (v4.0)                                 │
-│  Open-Meteo Current API (free) · Open-Meteo Archive API (free)              │
-│  NOAA CPC ONI (free) · Google Search Grounding · Gemini LLM                 │
-│  crop_knowledge.json (LLM context) · Legacy: regions.json (v2.x only)       │
-│  NO zone climate tables · NO static soil defaults · NO fallback crop lists  │
+│                             LLM LAYER                                        │
+│  Primary: LLaMA 3.2 via Ollama (local)  ·  Fallback: Gemini (4-key rot)    │
+│  Fast: gemini-2.0-flash-lite  ·  Search: Google Search Grounding           │
+└──┬──────────────────────────────────────────────────────────────────────────┘
+   │
+┌──▼──────────────────────────────────────────────────────────────────────────┐
+│                            DATA & ML (v4.0)                                │
+│  Open-Meteo Current + Archive API · NOAA CPC ONI (ENSO phase)              │
+│  crop_knowledge.json · Legacy ML: Random Forest, LSTM, XGBoost             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
