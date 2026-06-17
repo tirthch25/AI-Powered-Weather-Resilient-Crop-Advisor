@@ -79,6 +79,45 @@ Soil fields that are still loading show `🤖 Analyzing...` and update when back
 
 ---
 
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph L1["🖥️  PRESENTATION (Web Browser)"]
+        UI["<b>Global Dashboard</b><br/>Inputs: Country, State, District, Irrigation, Soil<br/>Outputs: Streaming JSON via SSE<br/>Components: Weather Card, Climate Panel,<br/>Soil Card, Forecast Chart, Market Prices,<br/>Crop Rankings, Farmer Chat"]
+    end
+
+    subgraph L2["🔌  API GATEWAY (FastAPI / Uvicorn)"]
+        API["<b>POST /api/analyze/stream</b> (SSE)<br/><b>POST /chat/stream</b> (SSE)<br/><b>GET /climate-signals</b><br/><b>GET /api/countries|states|districts</b><br/><b>GET /health</b>"]
+    end
+
+    subgraph L3["🧠  AGENTIC INTELLIGENCE (v4.0)"]
+        LA["📍 <b>Location Agent</b><br/>195 UN countries (ISO hardcoded)<br/>States: 100% LLM via llm_location_agent<br/>Districts: 100% LLM via llm_location_agent<br/>Coords embedded in LLM response<br/>24-hour in-memory cache"]
+        LLA["🗺️ <b>LLM Location Agent</b><br/>llm_get_states() per country<br/>llm_get_districts() per state<br/>llm_resolve_coords() for coord lookup<br/>Gemini (4-key rotation) + Ollama fallback"]
+        DGA["🌦️ <b>Data Gathering Agent</b><br/>• Open-Meteo (live wx, 30-min cache)<br/>• 6-month forecast (zone + live anchor)<br/>• ENSO adjustment (climate_signals.py)<br/>• Soil + Market (Search Grounding)"]
+        CSI["🌐 <b>Climate Signal Intelligence</b><br/>• NOAA ONI (ENSO phase)<br/>• Heat Stress assessor<br/>• Drought Index<br/>• Frost Risk<br/>• Flood Detection<br/>• Cyclone Basin tracking<br/>• Wildfire Risk<br/>• Gemini Search Grounding"]
+        CA["🌱 <b>Crop Agent</b><br/>Cache → Gemini+Search → Gemini<br/>→ Ollama+Search → Ollama<br/>→ _llm_simple_fallback → Empty list<br/>(No static zone tables)"]
+        WSA["🔍 <b>Web Search Agent</b><br/>DuckDuckGo tool for Ollama<br/>when Gemini not available"]
+    end
+
+    subgraph L4["💬  CHAT & EXPLAIN"]
+        CHAT["LLM Farmer Chat<br/>(llm_chat.py)<br/>SSE token stream"]
+        EXP["LLM Explainer<br/>(llm_explainer.py)<br/>Crop explanation"]
+    end
+
+    subgraph L5["💾  DATA & ML"]
+        DB["crop_knowledge.json<br/>world_locations.json<br/>regions.json (legacy)"]
+        ML["Random Forest (crop)<br/>LSTM (weather, legacy)<br/>XGBoost (weather, legacy)"]
+    end
+
+    L1 -->|"SSE / HTTP"| L2
+    L2 --> L3
+    L3 -->|"LLM calls"| L4
+    L3 --> L5
+```
+
+---
+
 ## 🤖 Agent Architecture
 
 ```text
