@@ -4,10 +4,10 @@ Crop Recommendation Agent — v4 (100% Dynamic, No Static Fallback Tables)
 Strategy (priority order):
 
 1. In-memory cache (instant) — same location+season+zone returns cached result
-2. Gemini with Google Search Grounding — real-time crop advisories + live prices
-3. Gemini plain (4-key rotation, model fallback list) — knowledge-based
-4. Ollama with web search tool-calling — local LLM + DuckDuckGo
-5. Ollama plain — local LLM
+2. Ollama with web search tool-calling — local LLM (llama3.2) + DuckDuckGo
+3. Ollama plain — local LLM (no search)
+4. Gemini with Google Search Grounding — real-time crop advisories + live prices
+5. Gemini plain (4-key rotation, model fallback list) — knowledge-based
 6. Gemini simple fallback prompt — stripped-down request for basic recommendations
 
 NO STATIC FALLBACK TABLES: The old _fallback_crops() static tables (600+ lines of
@@ -399,7 +399,7 @@ def recommend_crops_agent(
     Generate AI crop recommendations for any global location.
 
     Pipeline (all LLM-driven — no static tables):
-      cache → Gemini+Search → Gemini plain → Ollama+Search → Ollama → Gemini simple → []
+      cache → Ollama+Search → Ollama plain → Gemini+Search → Gemini plain → Gemini simple → []
     """
     current  = gathered_data.get("current", {})
     forecast = gathered_data.get("forecast_6month", [])
@@ -435,33 +435,32 @@ def recommend_crops_agent(
 
     crops = None
 
-    # ── 3. Gemini + Google Search Grounding ───────────────────────────────────
-    if GEMINI_KEYS:
-        raw   = _call_gemini_with_search(prompt_with_search)
-        crops = _validate_crops(raw, country)
-        if crops:
-            logger.info("[CropAgent] Using search-grounded Gemini result")
+    # ── 3. Ollama with web search (primary) ──────────────────────────────────
+    raw   = _call_ollama_with_search(prompt_with_search, location=location_str)
+    crops = _validate_crops(raw, country)
+    if crops:
+        logger.info("[CropAgent] Using Ollama+search result")
 
-    # ── 4. Gemini plain ───────────────────────────────────────────────────────
-    if not crops and GEMINI_KEYS:
-        raw   = _call_gemini(prompt_plain)
-        crops = _validate_crops(raw, country)
-        if crops:
-            logger.info("[CropAgent] Using plain Gemini result")
-
-    # ── 5. Ollama with web search ─────────────────────────────────────────────
-    if not crops:
-        raw   = _call_ollama_with_search(prompt_with_search, location=location_str)
-        crops = _validate_crops(raw, country)
-        if crops:
-            logger.info("[CropAgent] Using Ollama+search result")
-
-    # ── 6. Ollama plain ───────────────────────────────────────────────────────
+    # ── 4. Ollama plain ───────────────────────────────────────────────────────
     if not crops:
         raw   = _call_ollama(prompt_plain)
         crops = _validate_crops(raw, country)
         if crops:
             logger.info("[CropAgent] Using plain Ollama result")
+
+    # ── 5. Gemini + Google Search Grounding (fallback) ────────────────────────
+    if not crops and GEMINI_KEYS:
+        raw   = _call_gemini_with_search(prompt_with_search)
+        crops = _validate_crops(raw, country)
+        if crops:
+            logger.info("[CropAgent] Using search-grounded Gemini result")
+
+    # ── 6. Gemini plain ───────────────────────────────────────────────────────
+    if not crops and GEMINI_KEYS:
+        raw   = _call_gemini(prompt_plain)
+        crops = _validate_crops(raw, country)
+        if crops:
+            logger.info("[CropAgent] Using plain Gemini result")
 
     # ── 7. LLM simple fallback (stripped-down prompt) ─────────────────────────
     if not crops:
