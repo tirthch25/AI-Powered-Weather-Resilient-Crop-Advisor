@@ -1,307 +1,367 @@
-# 🖥️ Supercomputer / HPC Migration Guide
-## Indian Farmer Crop Recommendation System
+# 🖥️ PARAM Shavak HPC — Complete Deployment Guide
+## AI-Powered Weather-Resilient Crop Advisor
 
-This file tells you **exactly what changes to make** to run this project on a
-supercomputer or HPC cluster (e.g., PARAM Shakti, PARAM Siddhi, or any SLURM-based
-cluster).
+This guide tells you **exactly what to do** to run this project on **PARAM Shavak**,
+the C-DAC compact supercomputer running BOSS Linux (Bharat Operating System Solutions).
 
 ---
 
 ## 📋 TABLE OF CONTENTS
 
-1. [Quick Checklist](#quick-checklist)
-2. [Step 1 — Copy Your Project to HPC](#step-1--copy-your-project-to-hpc)
-3. [Step 2 — Set Up Python Environment](#step-2--set-up-python-environment)
-4. [Step 3 — Change the .env File](#step-3--change-the-env-file)
-5. [Step 4 — Handle Ollama (LLM)](#step-4--handle-ollama-llm)
-6. [Step 5 — Create a SLURM Job Script](#step-5--create-a-slurm-job-script)
-7. [Step 6 — Run the Web Server (Optional)](#step-6--run-the-web-server-optional)
-8. [Files You Must Change](#files-you-must-change)
-9. [Files You Do NOT Need to Change](#files-you-do-not-need-to-change)
-10. [Common Errors and Fixes](#common-errors-and-fixes)
+1. [About PARAM Shavak](#about-param-shavak)
+2. [Compatibility Summary](#compatibility-summary)
+3. [Quick Checklist](#quick-checklist)
+4. [Step 1 — Transfer Project to HPC](#step-1--transfer-project-to-hpc)
+5. [Step 2 — Set Up Python Environment](#step-2--set-up-python-environment)
+6. [Step 3 — Configure the .env File](#step-3--configure-the-env-file)
+7. [Step 4 — Handle the LLM (Gemini vs Ollama)](#step-4--handle-the-llm-gemini-vs-ollama)
+8. [Step 5 — Submit a SLURM Batch Job](#step-5--submit-a-slurm-batch-job)
+9. [Step 6 — Run the Web Server](#step-6--run-the-web-server)
+10. [Step 7 — States Not Loading Fix](#step-7--states-not-loading-fix)
+11. [Files to Change vs Not Change](#files-to-change-vs-not-change)
+12. [Common Errors and Fixes](#common-errors-and-fixes)
+13. [Contact](#contact)
+
+---
+
+## 🖥️ ABOUT PARAM SHAVAK
+
+| Property | Details |
+|---|---|
+| **System** | PARAM Shavak — C-DAC Supercomputing-in-a-Box |
+| **OS** | BOSS Linux (Bharat Operating System Solutions) |
+| **CPU** | Dual Intel Xeon Scalable (Gold 6240R or similar) |
+| **GPU** | GPGPU/GPU accelerator cards (NVIDIA) |
+| **Job Scheduler** | SLURM (Simple Linux Utility for Resource Management) |
+| **Module System** | Environment Modules (`module load / avail`) |
+| **Python** | Pre-installed; `conda` or `venv` for environments |
+| **HPC Stack** | CHReME (C-DAC HPC Resource Management Engine) + ONAMA |
+
+---
+
+## ✅ COMPATIBILITY SUMMARY
+
+| Component | Compatible? | Notes |
+|---|---|---|
+| FastAPI web server | ✅ Yes | Works on BOSS Linux (Python 3.10/3.11) |
+| SLURM job scripts | ✅ Yes | `run_job.slurm` is already written for Param Shavak |
+| Gemini API (LLM) | ✅ Yes | Recommended for HPC — no local server needed |
+| PyTorch / XGBoost | ✅ Yes | GPU-accelerated on NVIDIA cards |
+| Pandas / NumPy | ✅ Yes | Standard HPC scientific stack |
+| Open-Meteo weather | ✅ Yes | Requires internet access on the compute node |
+| Ollama (local LLM) | ⚠️ Limited | Possible in interactive sessions only |
+| States dropdown | ✅ Yes | Uses Gemini API — fully works with `LLM_PROVIDER=gemini` |
 
 ---
 
 ## ✅ QUICK CHECKLIST
 
-Use this list to track your progress:
-
-- [ ] Copied project files to HPC using `scp` or `rsync`
-- [ ] Created a Conda or venv environment on HPC
-- [ ] Installed all dependencies from `requirements.txt`
-- [ ] Updated `.env` file with correct settings for HPC
-- [ ] Switched LLM from Ollama → Gemini API (recommended for HPC)
-- [ ] Created and tested a SLURM job script (`run_job.slurm`)
+- [ ] Transferred project to `/scratch/<username>/` on Param Shavak
+- [ ] Created conda environment `crop_env` with Python 3.11
+- [ ] Installed all packages from `requirements.txt`
+- [ ] Copied `.env.example` → `.env` and set `GEMINI_API_KEY`
+- [ ] Set `LLM_PROVIDER=gemini` in `.env`
+- [ ] Edited `run_job.slurm` with your username and correct partition
 - [ ] Submitted job with `sbatch run_job.slurm`
-- [ ] Verified output in the `logs/` folder
+- [ ] Verified output in `logs/` folder
 
 ---
 
-## STEP 1 — Copy Your Project to HPC
+## STEP 1 — Transfer Project to HPC
 
-On your **Windows PC**, open PowerShell or Command Prompt:
-
+### From Windows PC (PowerShell):
 ```powershell
-# Replace <your-username> and <hpc-address> with your actual HPC login
-scp -r "D:\CDAC\Indian-Farmer-Crop-Recommendation-System" <your-username>@<hpc-address>:/scratch/<your-username>/
+# Replace <your-username> and <hpc-address> with your actual login
+scp -r "D:\AI-Powered-Weather-Resilient-Crop-Advisor" <your-username>@<hpc-address>:/scratch/<your-username>/
 ```
 
-Or use **WinSCP** (GUI tool) if you prefer drag and drop.
+Or use **WinSCP** (GUI) for drag-and-drop transfer.
 
-> **Where to put it:**  Use `/scratch/<your-username>/` — this is the fast
-> working storage on most HPC clusters. Do NOT put it in your home directory
-> (`~/`) as it has very low storage limits.
+> **Where to put it:** Always use `/scratch/<your-username>/` — this is fast working
+> storage. Your home directory `~/` usually has very low quota on HPC systems.
 
 ---
 
 ## STEP 2 — Set Up Python Environment
 
-After logging into HPC via SSH:
+SSH into Param Shavak, then:
 
-### Option A: Using Conda (Recommended)
+### Option A: Conda (Recommended)
 ```bash
-# Load Conda module (command may differ on your HPC — ask your HPC admin)
-module load anaconda3/2023.09
+# Step 1: Check what modules are available
+module avail
 
-# Create a new environment
+# Step 2: Load Anaconda (find the exact name with: module spider anaconda)
+module load anaconda3
+
+# Step 3: Create a dedicated environment
 conda create -n crop_env python=3.11 -y
 
-# Activate it
+# Step 4: Activate it
 conda activate crop_env
 
-# Go to your project folder
-cd /scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
+# Step 5: Go to project folder
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
 
-# Install all packages
+# Step 6: Install all dependencies
 pip install -r requirements.txt
 ```
 
-### Option B: Using Python venv
+### Option B: Python venv (If conda is unavailable)
 ```bash
-module load python/3.11
+module load python/3.11   # Check exact name with: module spider python
 
 python -m venv .venv
 source .venv/bin/activate
 
-cd /scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
 pip install -r requirements.txt
 ```
 
+> **Tip:** After installing, run `python main.py` to confirm the setup works before
+> submitting any SLURM jobs.
+
 ---
 
-## STEP 3 — Change the .env File
-
-### ⚠️ CHANGE REQUIRED — This is important!
-
-Copy the example file and edit it:
+## STEP 3 — Configure the .env File
 
 ```bash
-cd /scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
 cp .env.example .env
-nano .env   # or use: vi .env
+nano .env    # or: vi .env
 ```
 
-**Change these values in `.env`:**
+**Set these values for Param Shavak:**
 
 ```dotenv
-# BEFORE (your current .env on Windows)
-LLM_PROVIDER=ollama
-OLLAMA_MODEL=llama3.2
-OLLAMA_BASE_URL=http://localhost:11434
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# ─────────────────────────────────────────────────────────────────
-# AFTER (what to put in .env on HPC)
-# ─────────────────────────────────────────────────────────────────
+# ── LLM Provider — CHANGE THIS on HPC ──────────────────────────────────────
+# Ollama cannot run as a persistent service on batch nodes.
+# Use Gemini instead — it's already fully integrated.
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=<paste your actual Gemini API key here>
 
-# Remove or comment out the Ollama lines — Ollama won't run on HPC nodes
+# ── Comment out / remove Ollama settings ───────────────────────────────────
 # OLLAMA_MODEL=llama3.2
 # OLLAMA_BASE_URL=http://localhost:11434
+
+# ── Weather API (no key needed — Open-Meteo is free) ───────────────────────
+# No changes needed for weather.
+
+# ── Web server port (optional) ──────────────────────────────────────────────
+PORT=8000
+HOST=0.0.0.0
 ```
 
-> Get your Gemini API key free at: https://aistudio.google.com/app/apikey
+> Get your free Gemini API key at: **https://aistudio.google.com/app/apikey**
 
 ---
 
-## STEP 4 — Handle Ollama (LLM)
+## STEP 4 — Handle the LLM (Gemini vs Ollama)
 
-### Why Ollama won't work on HPC:
-Ollama runs as a **background server** (`ollama serve`) on your local machine.
-HPC compute nodes are **batch-only** — you cannot start a persistent background
-service the same way.
+### Why Ollama does NOT work on HPC batch nodes
+Ollama runs as a background server (`ollama serve`) which requires a persistent
+process. HPC batch nodes are ephemeral — they don't support persistent background
+services in the same way.
 
-### ✅ Solution: Switch to Gemini API (Easiest)
+### ✅ Solution: Use Gemini API (Already Built In!)
+The project already has full Gemini support. Just set `LLM_PROVIDER=gemini` in `.env`.
 
-You already have Gemini support built in! Just do what Step 3 says:
-set `LLM_PROVIDER=gemini` and add your API key. The code in
-`src/services/llm_chat.py` will automatically use Gemini — no code changes needed.
+All features that use LLM will automatically work:
+- ✅ States and Districts dropdowns (via `/api/states/{code}`)
+- ✅ Crop recommendations (AI-generated)
+- ✅ Chat widget (Gemini-powered)
+- ✅ Soil analysis
+- ✅ Climate signals
 
-### Alternative: Run Ollama on HPC (Advanced)
-If your HPC has internet access and allows it, you can try:
+### Advanced: Ollama in Interactive Session Only
 ```bash
-# Download and run Ollama (ask your HPC admin if this is allowed)
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &        # start in background
-ollama pull llama3.2  # pull the model
-```
-Then keep `LLM_PROVIDER=ollama` in your `.env`.
+# Start an interactive compute session first
+srun --nodes=1 --cpus-per-task=4 --mem=16G --time=01:00:00 --pty bash
 
----
+# Then manually start Ollama
+ollama serve &
+sleep 10
+ollama pull llama3.2
 
-## STEP 5 — Create a SLURM Job Script
-
-### 📄 Create this new file: `run_job.slurm`
-
-Save this file inside your project root:
-`/scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/run_job.slurm`
-
-```bash
-#!/bin/bash
-#─────────────────────────────────────────────────
-# SLURM Job Configuration
-#─────────────────────────────────────────────────
-#SBATCH --job-name=crop_recommender       # Name of your job
-#SBATCH --nodes=1                         # Use 1 node
-#SBATCH --ntasks=1                        # 1 task
-#SBATCH --cpus-per-task=8                 # 8 CPU cores (good for scikit-learn)
-#SBATCH --gres=gpu:1                      # 1 GPU (for PyTorch — remove if no GPU needed)
-#SBATCH --mem=32G                         # 32 GB RAM
-#SBATCH --time=02:00:00                   # Max run time: 2 hours (HH:MM:SS)
-#SBATCH --output=logs/output_%j.log       # Save stdout to logs/
-#SBATCH --error=logs/error_%j.log         # Save stderr to logs/
-#SBATCH --partition=gpu                   # Partition/queue name (ask your HPC admin)
-
-#─────────────────────────────────────────────────
-# Environment Setup
-#─────────────────────────────────────────────────
-echo "Job started at: $(date)"
-echo "Running on node: $(hostname)"
-
-# Load required modules (exact names depend on your HPC — ask admin)
-module load anaconda3/2023.09
-module load cuda/12.0        # Only needed if using GPU with PyTorch
-
-# Activate your conda environment
+# Now run the app — Ollama will work in this session
 conda activate crop_env
-
-#─────────────────────────────────────────────────
-# Go to project directory
-#─────────────────────────────────────────────────
-cd /scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
-
-# Create logs directory if it doesn't exist
-mkdir -p logs
-
-#─────────────────────────────────────────────────
-# Run your program
-#─────────────────────────────────────────────────
-python main.py
-
-echo "Job finished at: $(date)"
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
+python run_website.py
 ```
 
-### ▶️ Submit the job:
+---
+
+## STEP 5 — Submit a SLURM Batch Job
+
+The file `run_job.slurm` is already included in the project root.
+Edit it first:
+
+```bash
+nano /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/run_job.slurm
+```
+
+**Change these two lines:**
+```bash
+HPC_USER="<YOUR_USERNAME>"          # ← Replace with your actual username
+#SBATCH --partition=gpu             # ← Run: sinfo  to find the correct partition name
+```
+
+**Submit the job:**
 ```bash
 sbatch run_job.slurm
 ```
 
-### 👀 Check job status:
+**Check job status:**
 ```bash
-squeue -u <your-username>     # See if your job is running/queued
-sacct -j <job-id>             # See job details after it finishes
-cat logs/output_<job-id>.log  # See your program's output
+squeue -u <your-username>           # See running/queued jobs
+sacct -j <job-id>                   # See job details
+cat logs/output_<job-id>.log        # View program output
 ```
 
-### ❌ Cancel a job:
+**Cancel a job:**
 ```bash
 scancel <job-id>
 ```
 
 ---
 
-## STEP 6 — Run the Web Server (Optional)
+## STEP 6 — Run the Web Server
 
-If you want to run the **FastAPI web interface** on HPC:
+The full web interface (FastAPI + UI) can be served from Param Shavak.
 
 ### Option A: Interactive Session (for testing)
 ```bash
-# Start an interactive session (not a batch job)
-srun --nodes=1 --cpus-per-task=4 --mem=16G --time=01:00:00 --pty bash
+srun --nodes=1 --cpus-per-task=4 --mem=16G --time=02:00:00 --pty bash
 
-# Then run the server
 conda activate crop_env
-cd /scratch/<your-username>/Indian-Farmer-Crop-Recommendation-System/agri_crop_recommendation
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
 python run_website.py
 ```
 
-Then use **SSH port forwarding** from your PC:
+### Option B: As a SLURM batch job
+Modify `run_job.slurm` — replace `python main.py` with:
+```bash
+python run_website.py
+```
+
+### Access the UI from your Windows PC:
 ```powershell
-# In a new PowerShell window on your Windows PC:
+# Open a new PowerShell window and run SSH port-forward:
 ssh -L 8000:localhost:8000 <your-username>@<hpc-address>
 
-# Now open your browser at: http://localhost:8000
+# Then open your browser at:
+# http://localhost:8000
 ```
 
 ---
 
-## 📁 FILES YOU MUST CHANGE
+## STEP 7 — States Not Loading Fix
 
-| File | What to Change |
-|------|----------------|
-| `agri_crop_recommendation/.env` | Set `LLM_PROVIDER=gemini`, add real `GEMINI_API_KEY`, comment out Ollama lines |
-| `run_job.slurm` *(new file)* | Replace `<your-username>` and `<hpc-address>` with your actual details. Adjust `--partition`, `--time`, `--mem` based on your HPC |
+If the State dropdown shows "⚠ No states data" on Param Shavak, it means the
+Gemini API call is failing. Here is the fix:
+
+### Check 1: Verify your GEMINI_API_KEY
+```bash
+cat /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation/.env
+# Confirm GEMINI_API_KEY is set and not empty
+```
+
+### Check 2: Test internet access from the compute node
+```bash
+curl -I https://generativelanguage.googleapis.com
+# Should return: HTTP/2 200  (or a redirect)
+# If it hangs or fails → compute node has no internet → contact HPC admin
+```
+
+### Check 3: Test the API endpoint manually
+```bash
+conda activate crop_env
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
+python -c "
+from src.agents.location_agent import get_states
+states = get_states('IN')
+print(f'States loaded: {len(states)}')
+print(states[:3])
+"
+```
+
+### Fix: If internet is blocked (common on HPC compute nodes)
+Some HPC nodes only allow outbound internet from the **login node**, not compute nodes.
+In that case, run the web server from a login node interactive session:
+
+```bash
+# On the LOGIN NODE (not a batch job):
+conda activate crop_env
+cd /scratch/<your-username>/AI-Powered-Weather-Resilient-Crop-Advisor/agri_crop_recommendation
+python run_website.py &
+# Then SSH port-forward from your PC as shown in Step 6
+```
 
 ---
 
-## 📁 FILES YOU DO NOT NEED TO CHANGE
+## 📁 FILES TO CHANGE vs NOT CHANGE
 
-These files work on HPC **without any modification**:
+### ✏️ Must Change
+| File | What to Change |
+|---|---|
+| `agri_crop_recommendation/.env` | Set `LLM_PROVIDER=gemini`, add `GEMINI_API_KEY`, comment out Ollama |
+| `run_job.slurm` | Replace `<YOUR_USERNAME>`, fix `--partition` name using `sinfo` |
 
+### 🔒 Do NOT Change (Already HPC-Compatible)
 | File | Reason |
-|------|--------|
-| `agri_crop_recommendation/src/services/llm_chat.py` | Already has Gemini fallback built-in |
-| `agri_crop_recommendation/requirements.txt` | All packages are HPC-compatible |
-| `agri_crop_recommendation/main.py` | Pure Python, works anywhere |
-| `agri_crop_recommendation/run_website.py` | FastAPI works on HPC |
-| All ML model files | PyTorch + XGBoost are HPC-native |
+|---|---|
+| `src/services/llm_chat.py` | Already has Gemini fallback built-in |
+| `src/agents/location_agent.py` | Fully LLM-based, works with Gemini |
+| `src/agents/llm_location_agent.py` | Works with Gemini API |
+| `requirements.txt` | All packages available via pip on BOSS Linux |
+| `main.py` | Pure Python, works anywhere |
+| `run_website.py` | FastAPI/Uvicorn works on BOSS Linux |
+| All ML model files | PyTorch + XGBoost are standard HPC packages |
+| `templates/index.html` | Static HTML, no changes needed |
+| `static/js/app.js` | Client-side JS, no changes needed |
 
 ---
 
 ## 🐛 COMMON ERRORS AND FIXES
 
-### Error: `ModuleNotFoundError: No module named 'xyz'`
+### `ModuleNotFoundError: No module named 'xyz'`
 ```bash
-# Re-install requirements
-pip install -r requirements.txt
-
-# Or install the specific missing module
-pip install xyz
+pip install -r requirements.txt   # Re-run full install
+pip install xyz                   # Or install the specific package
 ```
 
-### Error: `ollama.ConnectionError` or `Ollama not available`
+### `ollama.ConnectionError` / `Ollama not available`
 ```
-Fix: In your .env file, change LLM_PROVIDER=ollama → LLM_PROVIDER=gemini
-     and add your GEMINI_API_KEY
-```
-
-### Error: `CUDA out of memory`
-```
-Fix: In run_job.slurm, either:
-     - Reduce batch size in your model code
-     - Request more GPU memory: #SBATCH --gres=gpu:2
-     - Or remove GPU line and run on CPU only (slower but works)
+Fix: Set LLM_PROVIDER=gemini in your .env file and add your GEMINI_API_KEY.
+     Ollama is NOT needed — Gemini works for all features.
 ```
 
-### Error: `sbatch: error: invalid partition specified`
-```
-Fix: Ask your HPC system administrator what partition names are available.
-     Common names: gpu, compute, standard, batch, normal
-     Change: #SBATCH --partition=<correct-name>
+### `CUDA out of memory`
+```bash
+# In run_job.slurm, either:
+# Option 1: Request more GPU memory
+#SBATCH --gres=gpu:2
+
+# Option 2: Run on CPU only (remove GPU line)
+# Comment out: #SBATCH --gres=gpu:1
 ```
 
-### Error: `Permission denied` when running setup scripts
+### `sbatch: error: invalid partition specified`
+```bash
+# Check what partitions exist on your Param Shavak:
+sinfo
+
+# Common names on C-DAC systems: gpu, compute, standard, batch, normal
+# Then change in run_job.slurm:
+# #SBATCH --partition=<correct-name>
+```
+
+### States dropdown shows "⚠ No states data"
+```
+Fix: See Step 7 above.
+     Most likely cause: GEMINI_API_KEY not set, or no internet on compute node.
+```
+
+### `Permission denied` when running setup scripts
 ```bash
 chmod +x setup.sh
 ./setup.sh
@@ -311,19 +371,30 @@ chmod +x setup.sh
 ```
 This is normal — the HPC queue may be busy.
 Run: squeue -u <your-username>
-Look at "REASON" column for why it's pending.
-Try reducing --time or --mem to get faster allocation.
+Look at the "REASON" column.
+Try reducing --time or --mem for faster queue allocation.
+```
+
+### `Connection refused` when accessing web UI
+```
+Make sure SSH port-forwarding is active:
+  ssh -L 8000:localhost:8000 <your-username>@<hpc-address>
+Then go to: http://localhost:8000
 ```
 
 ---
 
-## 📞 WHO TO CONTACT
+## 📞 CONTACT / RESOURCES
 
-- **For module names and partition names** → Contact your HPC system administrator
-- **For Gemini API key** → https://aistudio.google.com/app/apikey
-- **For PARAM Shakti / PARAM Siddhi (C-DAC HPC)** → https://www.cdac.in/index.aspx?id=hpc
+| Resource | Link |
+|---|---|
+| C-DAC HPC / PARAM Shavak | https://www.cdac.in/index.aspx?id=hpc |
+| Free Gemini API Key | https://aistudio.google.com/app/apikey |
+| BOSS Linux | https://bosslinux.in |
+| SLURM documentation | https://slurm.schedmd.com/documentation.html |
 
 ---
 
-*Guide prepared for: Indian Farmer Crop Recommendation System*
-*Last updated: 2026-05-27*
+*Guide prepared for: AI-Powered Weather-Resilient Crop Advisor*  
+*Compatible with: PARAM Shavak (C-DAC) · BOSS Linux · SLURM*  
+*Last updated: 2026-06-18*
