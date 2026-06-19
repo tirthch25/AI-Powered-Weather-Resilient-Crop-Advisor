@@ -406,11 +406,11 @@ def apply_enso_to_forecast(forecast_6month: list, climate_signals: dict) -> list
 | Priority | Method | Description |
 |----------|--------|-------------|
 | 1 | **In-memory cache** | Returns instantly if same `(country, state, district, season, climate, irrigation)` was requested within 1 hour |
-| 2 | **Gemini + Google Search Grounding** | Real-time crop advisories, current pest alerts, live market info |
-| 3 | **Gemini plain** (4-key rotation, model chain) | LLM knowledge with full location-aware prompt |
-| 4 | **Ollama + Web Search Tool** | Local LLM with DuckDuckGo tool-calling |
-| 5 | **Ollama plain** | Local LLM, no search |
-| 6 | **`_llm_simple_fallback()`** | Minimal single-shot Gemini prompt — last resort |
+| 2 | **Ollama + Web Search Tool** | Local LLM (llama3.2) with DuckDuckGo tool-calling — primary provider |
+| 3 | **Ollama plain** | Local LLM, no search |
+| 4 | **Gemini + Google Search Grounding** | Real-time crop advisories, current pest alerts, live market info |
+| 5 | **Gemini plain** (4-key rotation, model chain) | LLM knowledge with full location-aware prompt |
+| 6 | **`_llm_simple_fallback()`** | Minimal single-shot Gemini/Ollama prompt — last resort |
 | 7 | **Empty list** | Honest empty state — **no static crop tables** |
 
 #### Prompt Structure (`_build_prompt`)
@@ -736,12 +736,6 @@ This provides **real per-district climate data** rather than zone-wide approxima
 
 ### 7.5 Legacy Data (v2.x)
 
-### 7.4 Market Price Templates (`data_gathering_agent.py` inline)
-
-Currency-aware templates for 6+ zones. `{cur}` is substituted with the country's currency symbol at runtime.
-
-### 7.5 Legacy Data (v2.x)
-
 | File | Description |
 |------|-------------|
 | `data/reference/regions.json` | India 640-district database with state code mapping |
@@ -798,16 +792,17 @@ final_score = 0.6 × ML_score + 0.4 × rule_based_score
 All 3 LLM-using agents follow the same priority chain:
 
 ```
-1. Gemini + Google Search Grounding (search-capable models)
-   → Real-time data from the live web
-2. Gemini plain (all models, 4-key rotation)
-   → Static LLM knowledge
-3. Ollama + DuckDuckGo Web Search Tool
-   → Local model with search capability
-4. Ollama plain
+1. Ollama + DuckDuckGo Web Search Tool
+   → Local model with web search (primary; free, private)
+2. Ollama plain
    → Local model, fully offline
-5. Zone-based rule defaults
-   → No API, instant, geographically aware
+3. Gemini + Google Search Grounding (search-capable models)
+   → Real-time data from the live web
+4. Gemini plain (all models, 4-key rotation)
+   → Static LLM knowledge
+5. _llm_simple_fallback() — minimal stripped-down prompt
+   → Last-chance attempt before returning empty result
+6. Empty result (honest empty state — no static zone defaults)
 ```
 
 ### 9.2 Gemini Key Rotation
@@ -898,18 +893,19 @@ Examples:
 
 _(See Section 3.5 for detailed coverage.)_
 
-### 11.3 Fallback Tables by Climate Zone
+### 11.3 All-LLM-Fail Behaviour (v4.0)
 
-When all LLM calls fail, crops are returned from hardcoded zone-specific tables:
+In v4.0, **all static fallback zone crop tables have been removed**. There is no `_fallback_crops()` function.
 
-| Zone | Crops Returned |
-|------|---------------|
-| Tropical | Rice, Maize, Cassava, Sweet Potato, Plantain, Groundnut |
-| Arid/Semi-Arid | Sorghum, Millet, Sesame, Cowpea, Dates, Cotton |
-| Mediterranean | Wheat, Olive, Grape, Tomato, Sunflower, Barley |
-| Temperate (Europe) | Sugar Beet, Winter Wheat, Canola, Potato, Barley (season-dependent) |
-| Temperate (Americas) | Corn, Soybean, Winter Wheat, Cotton, Sorghum, Sunflower |
-| Continental | Wheat, Sunflower, Soybean, Sugar Beet, Canola, Barley |
+When every LLM provider fails (Ollama unavailable + Gemini quota exhausted + `_llm_simple_fallback()` also fails), the agent returns an **empty list** `[]`.
+
+The UI displays a clear message asking the user to check their LLM configuration or try again later. This is intentional: serving fake, hardcoded crop data is considered worse than an honest empty state.
+
+| Scenario | v3.x Behaviour | v4.0 Behaviour |
+|----------|---------------|----------------|
+| All LLMs fail | Returns static zone table (600+ lines) | Returns `[]` — honest empty list |
+| Partial failure | May mix static + LLM data | Pure LLM or nothing |
+| No Gemini key | Falls back to zone table | Falls back to Ollama, then `[]` |
 
 ---
 

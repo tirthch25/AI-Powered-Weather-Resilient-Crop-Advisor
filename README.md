@@ -45,7 +45,7 @@ A user selects their country, state, and district. The system runs a **5-step st
 | `_ZONE_SOIL_DEFAULTS` — hardcoded soil per zone | Gemini `_llm_enrich_fast()` + search-grounded background upgrade |
 | `_ZONE_MARKET_TEMPLATES` — templated market prices | Gemini Search Grounding — real current prices or nothing |
 | `_COUNTRY_CURRENCY` — 30-country currency map | LLM returns correct local currency automatically |
-| `_COUNTRY_CROP_HINTS` — 60+ country static hints | Search-grounded Gemini prompt with dynamic regional context |
+| `_COUNTRY_CROP_HINTS` — 60+ country static hints | Gemini/Ollama prompt with dynamic regional context (no hints needed) |
 | `_fallback_crops()` — 600+ line static crop table | `_llm_simple_fallback()` — minimal Gemini call, empty on failure |
 | `_HINDI_CROP_NAMES`, `_SH_COUNTRIES` — static validators | Geographic region prompting makes these unnecessary |
 | Zone-based weather estimate when API fails | `_llm_estimate_current_weather()` — LLM estimate from coordinates |
@@ -125,10 +125,10 @@ Soil fields that are still loading show `🤖 Analyzing...` and update when back
 ┌──▼──────────────────────────────────▼──────────────────────────────────────┐
 │                         CROP AGENT — Step 5 (crop_agent.py)                │
 │  1. In-memory cache (1h TTL)                                               │
-│  2. Gemini + Google Search Grounding  → real-time crop advisories          │
-│  3. Gemini plain (4-key rotation × 6-model fallback chain)                 │
-│  4. Ollama + DuckDuckGo (web_search_agent.py)  → local LLM + web search   │
-│  5. Ollama plain                                                           │
+│  2. Ollama + DuckDuckGo (web_search_agent.py)  → local LLM + web search   │
+│  3. Ollama plain                                                           │
+│  4. Gemini + Google Search Grounding  → real-time crop advisories          │
+│  5. Gemini plain (4-key rotation × 6-model fallback chain)                 │
 │  6. _llm_simple_fallback()  → minimal single-shot prompt                  │
 │  7. Empty list  (NO static zone crop tables — ever)                        │
 └──┬─────────────────────────────────────────────────────────────────────────┘
@@ -193,11 +193,11 @@ If both fail: soil shows `🤖 Analyzing...`, market shows "data being gathered"
 | Priority | Method |
 |----------|--------|
 | 1 | In-memory cache (1h) |
-| 2 | Gemini + Google Search Grounding |
-| 3 | Gemini plain (4-key rotation) |
-| 4 | Ollama + DuckDuckGo web search |
-| 5 | Ollama plain |
-| 6 | `_llm_simple_fallback()` — minimal Gemini call |
+| 2 | Ollama + DuckDuckGo web search |
+| 3 | Ollama plain |
+| 4 | Gemini + Google Search Grounding |
+| 5 | Gemini plain (4-key rotation) |
+| 6 | `_llm_simple_fallback()` — minimal Gemini/Ollama call |
 | 7 | **Empty list** — no static crop tables |
 
 ---
@@ -272,11 +272,11 @@ Farmer Input (Country → State → District + Farm Details)
 ### Provider Priority Chain
 
 ```
-1. Gemini + Google Search Grounding  ← Real-time advisories, current prices
-2. Gemini Plain (4-key rotation)     ← Fallback if Search Grounding unavailable
-3. Ollama + DuckDuckGo Tool          ← Local model with web search
-4. Ollama Plain                      ← Local model, no internet
-5. _llm_simple_fallback()            ← Minimal single-shot prompt
+1. Ollama + DuckDuckGo Tool          ← Local model with web search (primary)
+2. Ollama Plain                      ← Local model, no internet
+3. Gemini + Google Search Grounding  ← Real-time advisories, current prices
+4. Gemini Plain (4-key rotation)     ← Fallback if Search Grounding unavailable
+5. _llm_simple_fallback()            ← Minimal single-shot prompt (Gemini/Ollama)
 6. Empty result                      ← Honest empty state (no static filler)
 ```
 
